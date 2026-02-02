@@ -31,6 +31,7 @@
 		VWS008 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS008 /* SettingsView.swift */; };
 		VWS009 /* SmartPlaylistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS009 /* SmartPlaylistView.swift */; };
 		VWS010 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS010 /* NowPlayingView.swift */; };
+		VWS011 /* ImportPlaylistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS011 /* ImportPlaylistView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 		SRC_VWS008 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		SRC_VWS009 /* SmartPlaylistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPlaylistView.swift; sourceTree = "<group>"; };
 		SRC_VWS010 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
+		SRC_VWS011 /* ImportPlaylistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPlaylistView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +159,7 @@
 				SRC_VWS008 /* SettingsView.swift */,
 				SRC_VWS009 /* SmartPlaylistView.swift */,
 				SRC_VWS010 /* NowPlayingView.swift */,
+				SRC_VWS011 /* ImportPlaylistView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -252,6 +255,7 @@
 				VWS008 /* SettingsView.swift in Sources */,
 				VWS009 /* SmartPlaylistView.swift in Sources */,
 				VWS010 /* NowPlayingView.swift in Sources */,
+				VWS011 /* ImportPlaylistView.swift in Sources */,
 				UTL001 /* Extensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

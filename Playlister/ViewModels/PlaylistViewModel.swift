@@ -181,6 +181,35 @@ final class PlaylistViewModel: ObservableObject {
         startCreatingPlaylist()
     }
     
+    /// Create a new playlist with the given tracks (for import functionality)
+    func createPlaylist(name: String, tracks: [Track]) async throws {
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else {
+            throw PlexAPIError.invalidResponse
+        }
+        
+        guard !tracks.isEmpty else {
+            throw PlexAPIError.playlistRequiresTrack
+        }
+        
+        guard let libraryKey = libraryKey else {
+            throw PlexAPIError.notConnected
+        }
+        
+        // Build URIs for all tracks
+        var uris: [String] = []
+        for track in tracks {
+            let uri = await plexService.trackURI(for: track, libraryKey: libraryKey)
+            uris.append(uri)
+        }
+        
+        let playlist = try await plexService.createPlaylist(title: name, trackURIs: uris)
+        playlists.insert(playlist, at: 0)
+        selectedPlaylist = playlist
+        
+        // Fetch the tracks to show in the middle column
+        await fetchTracks(for: playlist)
+    }
+    
     /// Update a playlist's title and/or summary
     func updatePlaylist(title: String? = nil, summary: String? = nil) async {
         guard let playlist = selectedPlaylist else { return }

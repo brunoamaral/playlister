@@ -11,6 +11,7 @@ struct PlaylistsColumn: View {
     @State private var isHoveringNewButton = false
     @State private var filterText = ""
     @State private var isShowingSmartPlaylistSheet = false
+    @State private var isShowingImportSheet = false
     @State private var editingSmartPlaylist: Playlist?
     
     // MARK: - Computed Properties
@@ -107,6 +108,38 @@ struct PlaylistsColumn: View {
         .sheet(isPresented: $isShowingSmartPlaylistSheet) {
             SmartPlaylistView(viewModel: viewModel, existingPlaylist: editingSmartPlaylist)
         }
+        .sheet(isPresented: $isShowingImportSheet) {
+            ImportPlaylistView(playlistViewModel: viewModel)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        viewModel.startCreatingPlaylist()
+                    } label: {
+                        Label("New Playlist", systemImage: "music.note.list")
+                    }
+                    
+                    Button {
+                        editingSmartPlaylist = nil
+                        isShowingSmartPlaylistSheet = true
+                    } label: {
+                        Label("New Smart Playlist", systemImage: "gearshape")
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        isShowingImportSheet = true
+                    } label: {
+                        Label("Import from Text...", systemImage: "square.and.arrow.down")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .help("Create New Playlist")
+            }
+        }
     }
     
     // MARK: - Empty State
@@ -126,6 +159,11 @@ struct PlaylistsColumn: View {
                 Button("New Smart Playlist") {
                     editingSmartPlaylist = nil
                     isShowingSmartPlaylistSheet = true
+                }
+                .buttonStyle(.bordered)
+                
+                Button("Import from Text...") {
+                    isShowingImportSheet = true
                 }
                 .buttonStyle(.bordered)
             }

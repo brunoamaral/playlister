@@ -10,6 +10,7 @@ A native macOS app for managing Plex music playlists.
 
 - **Three-Column Layout**: Browse playlists, view tracks, and search your library
 - **Smart Playlists**: Create dynamic playlists with custom rules and filters
+- **Import Playlists**: Import from text files or paste track lists (Artist - Title format)
 - **Audio Preview**: Listen to tracks before adding them to playlists
 - **Drag & Drop**: Easily reorder tracks within playlists
 - **Plex OAuth**: Secure authentication with your Plex account
@@ -17,7 +18,7 @@ A native macOS app for managing Plex music playlists.
 
 ## Screenshots
 
-<!-- Add screenshots here -->
+![Playlister Screenshot](screenshots/image-20260202173400382.png)
 
 ## Requirements
 
@@ -31,7 +32,7 @@ A native macOS app for managing Plex music playlists.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/playlister.git
+   git clone https://github.com/brunoamaral/playlister.git
    cd playlister
    ```
 
