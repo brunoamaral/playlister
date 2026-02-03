@@ -245,20 +245,51 @@ struct SmartPlaylistView: View {
     }
     
     /// Build the filter string for Plex API
+    /// Format: field1=value1&field2=value2 (all rules joined with &)
+    /// For "any" match type, we add push=1&or=1 parameters
     private func buildFilterString() -> String {
-        let operator_ = matchType == .all ? "&" : "|"
+        var filterParts: [String] = []
         
-        let filterParts = rules.compactMap { rule -> String? in
-            guard !rule.value.isEmpty else { return nil }
+        // Add match type parameters for "any" (OR) matching
+        if matchType == .any && rules.count > 1 {
+            filterParts.append("push=1")
+            filterParts.append("or=1")
+        }
+        
+        for rule in rules {
+            guard !rule.value.isEmpty else { continue }
             
             let field = rule.field.plexKey
             let comparison = rule.comparison.plexOperator
-            let value = rule.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rule.value
             
-            return "\(field)\(comparison)\(value)"
+            // Format value based on field type
+            var formattedValue = rule.value
+            
+            // For date fields, convert to relative format (e.g., "30" days -> "-30d")
+            if rule.field.fieldType == .date {
+                // Plex uses negative values for "in the last X days"
+                formattedValue = "-\(rule.value)d"
+            }
+            
+            // For rating field, Plex uses 0-10 scale (multiply by 2 if user enters 1-5)
+            if rule.field == .rating {
+                if let rating = Int(rule.value), rating <= 5 {
+                    formattedValue = "\(rating * 2)"
+                }
+            }
+            
+            // URL encode the value
+            let encodedValue = formattedValue.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? formattedValue
+            
+            filterParts.append("\(field)\(comparison)\(encodedValue)")
         }
         
-        return filterParts.joined(separator: operator_)
+        // Close the OR group if we opened one
+        if matchType == .any && rules.count > 1 {
+            filterParts.append("pop=1")
+        }
+        
+        return filterParts.joined(separator: "&")
     }
 }
 
@@ -372,54 +403,86 @@ enum RuleField: String, CaseIterable {
         }
     }
     
-    var availableComparisons: [RuleComparison] {
+    var fieldType: FieldType {
         switch self {
         case .artist, .album, .title, .genre:
-            return [.contains, .doesNotContain, .equals, .startsWith, .endsWith]
+            return .string
         case .year, .rating, .playCount:
-            return [.equals, .lessThan, .greaterThan, .inRange]
+            return .integer
         case .dateAdded, .lastPlayed:
-            return [.inTheLast, .notInTheLast, .before, .after]
+            return .date
+        }
+    }
+    
+    var availableComparisons: [RuleComparison] {
+        switch fieldType {
+        case .string:
+            return [.contains, .doesNotContain, .exactMatch, .doesNotExactMatch, .beginsWith, .endsWith]
+        case .integer:
+            return [.equals, .notEquals, .greaterThanOrEqual, .lessThanOrEqual]
+        case .date:
+            return [.inTheLast, .notInTheLast]
         }
     }
 }
 
+enum FieldType {
+    case string, integer, date
+}
+
 enum RuleComparison: String, CaseIterable {
-    case contains, doesNotContain, equals, startsWith, endsWith
-    case lessThan, greaterThan, inRange
-    case inTheLast, notInTheLast, before, after
+    // String comparisons (per Plex API docs)
+    case contains           // = (contains substring)
+    case doesNotContain     // != (does not contain)
+    case exactMatch         // == (exact match)
+    case doesNotExactMatch  // !== (does not exact match)
+    case beginsWith         // <= (begins with)
+    case endsWith           // >= (ends with)
+    
+    // Integer comparisons (per Plex API docs)
+    case equals             // = (equals)
+    case notEquals          // != (not equals)
+    case greaterThanOrEqual // >>= (greater than or equal)
+    case lessThanOrEqual    // <<= (less than or equal)
+    
+    // Date comparisons (use relative values like 30d, 4w)
+    case inTheLast          // >>= with relative date
+    case notInTheLast       // <<= with relative date
     
     var displayName: String {
         switch self {
         case .contains: return "contains"
         case .doesNotContain: return "does not contain"
-        case .equals: return "is"
-        case .startsWith: return "starts with"
+        case .exactMatch: return "is exactly"
+        case .doesNotExactMatch: return "is not exactly"
+        case .beginsWith: return "begins with"
         case .endsWith: return "ends with"
-        case .lessThan: return "is less than"
-        case .greaterThan: return "is greater than"
-        case .inRange: return "is in the range"
+        case .equals: return "is"
+        case .notEquals: return "is not"
+        case .greaterThanOrEqual: return "is greater than or equal to"
+        case .lessThanOrEqual: return "is less than or equal to"
         case .inTheLast: return "is in the last"
         case .notInTheLast: return "is not in the last"
-        case .before: return "is before"
-        case .after: return "is after"
         }
     }
     
     var plexOperator: String {
         switch self {
-        case .contains: return "~="
-        case .doesNotContain: return "!~="
+        // String operators per Plex API
+        case .contains: return "="
+        case .doesNotContain: return "!="
+        case .exactMatch: return "=="
+        case .doesNotExactMatch: return "!=="
+        case .beginsWith: return "<="
+        case .endsWith: return ">="
+        // Integer operators per Plex API
         case .equals: return "="
-        case .startsWith: return "^="
-        case .endsWith: return "$="
-        case .lessThan: return "<"
-        case .greaterThan: return ">"
-        case .inRange: return "><"
+        case .notEquals: return "!="
+        case .greaterThanOrEqual: return ">>="
+        case .lessThanOrEqual: return "<<="
+        // Date operators (use integer operators with relative values)
         case .inTheLast: return ">>="
         case .notInTheLast: return "<<="
-        case .before: return "<"
-        case .after: return ">"
         }
     }
 }

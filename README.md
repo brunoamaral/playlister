@@ -69,10 +69,17 @@ cp -R build/Release/Playlister.app /Applications/
 
 ### Smart Playlists
 
-Create dynamic playlists based on rules:
-- Filter by artist, album, genre, year, rating, and more
-- Combine multiple rules
-- Set limits and sort options
+Create dynamic playlists that automatically update based on filter rules:
+
+**Available Filters:**
+- **Text fields** (Artist, Album, Title, Genre): contains, does not contain, is exactly, begins with, ends with
+- **Numeric fields** (Year, Rating, Play Count): equals, not equals, greater than, less than
+- **Date fields** (Date Added, Last Played): in the last X days, not in the last X days
+
+**Options:**
+- Match **all** rules (AND) or **any** rule (OR)
+- Limit results by track count
+- Sort by: random, most played, least played, recently added, highest rated
 
 ### Settings
 

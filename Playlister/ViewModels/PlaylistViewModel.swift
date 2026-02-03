@@ -264,12 +264,12 @@ final class PlaylistViewModel: ObservableObject {
     
     /// Create a new smart playlist with filter rules
     func createSmartPlaylist(title: String, filter: String, limit: Int?, sort: SortOption) async throws {
-        // Get the music library key if not already set
-        let libKey: String
+        // Get the music library key (section ID) if not already set
+        let sectionId: String
         if let key = libraryKey {
-            libKey = key
+            sectionId = key
         } else if let key = try await plexService.getMusicLibraryKey() {
-            libKey = key
+            sectionId = key
             libraryKey = key
         } else {
             throw PlexAPIError.notConnected
@@ -277,7 +277,7 @@ final class PlaylistViewModel: ObservableObject {
         
         let playlist = try await plexService.createSmartPlaylist(
             title: title,
-            libraryKey: libKey,
+            sectionId: sectionId,
             filter: filter,
             limit: limit,
             sort: sort.plexSort
@@ -289,12 +289,12 @@ final class PlaylistViewModel: ObservableObject {
     
     /// Update an existing smart playlist
     func updateSmartPlaylist(playlistId: String, title: String, filter: String, limit: Int?, sort: SortOption) async throws {
-        // Get the music library key if not already set
-        let libKey: String
+        // Get the music library key (section ID) if not already set
+        let sectionId: String
         if let key = libraryKey {
-            libKey = key
+            sectionId = key
         } else if let key = try await plexService.getMusicLibraryKey() {
-            libKey = key
+            sectionId = key
             libraryKey = key
         } else {
             throw PlexAPIError.notConnected
@@ -302,7 +302,7 @@ final class PlaylistViewModel: ObservableObject {
         
         let updated = try await plexService.updateSmartPlaylist(
             playlistId: playlistId,
-            libraryKey: libKey,
+            sectionId: sectionId,
             title: title,
             filter: filter,
             limit: limit,

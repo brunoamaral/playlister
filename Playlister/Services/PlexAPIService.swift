@@ -585,17 +585,24 @@ actor PlexAPIService {
     // MARK: - Smart Playlist Operations
     
     /// Create a new smart playlist with filter rules
-    func createSmartPlaylist(title: String, libraryKey: String, filter: String, limit: Int?, sort: String?) async throws -> Playlist {
+    /// URI format per Plex API: library://{machine_id}/directory//library/sections/{section_id}/all?type=10&{filters}
+    /// type=10 for tracks, type=9 for albums, type=8 for artists
+    func createSmartPlaylist(title: String, sectionId: String, filter: String, limit: Int?, sort: String?) async throws -> Playlist {
         guard let server = currentServer, let token = authToken else {
             throw PlexAPIError.notConnected
         }
+        
+        // Build the smart playlist URI per Plex API spec
+        // Format: library://{machine_id}/directory//library/sections/{section_id}/all?type=10&{filters}
+        let smartUri = "library://\(server.machineIdentifier)/directory//library/sections/\(sectionId)/all?type=10&\(filter)"
         
         var components = URLComponents(string: server.baseURL + "/playlists")!
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "type", value: "audio"),
             URLQueryItem(name: "title", value: title),
             URLQueryItem(name: "smart", value: "1"),
-            URLQueryItem(name: "uri", value: "server://\(server.machineIdentifier)/com.plexapp.plugins.library/library/sections/\(libraryKey)/all?\(filter)")
+            URLQueryItem(name: "uri", value: smartUri),
+            URLQueryItem(name: "section", value: sectionId)  // Required for smart playlists
         ]
         
         if let limit = limit {
@@ -620,6 +627,8 @@ actor PlexAPIService {
         }
         
         #if DEBUG
+        print("Create smart playlist request URL: \(components.url?.absoluteString ?? "nil")")
+        print("Create smart playlist URI: \(smartUri)")
         print("Create smart playlist response status: \(httpResponse.statusCode)")
         if let responseString = String(data: data, encoding: .utf8) {
             print("Create smart playlist response: \(responseString)")
@@ -642,7 +651,7 @@ actor PlexAPIService {
     }
     
     /// Update an existing smart playlist's filter rules
-    func updateSmartPlaylist(playlistId: String, libraryKey: String, title: String?, filter: String?, limit: Int?, sort: String?) async throws -> Playlist {
+    func updateSmartPlaylist(playlistId: String, sectionId: String, title: String?, filter: String?, limit: Int?, sort: String?) async throws -> Playlist {
         guard let server = currentServer, let token = authToken else {
             throw PlexAPIError.notConnected
         }
@@ -655,7 +664,9 @@ actor PlexAPIService {
         }
         
         if let filter = filter {
-            queryItems.append(URLQueryItem(name: "uri", value: "server://\(server.machineIdentifier)/com.plexapp.plugins.library/library/sections/\(libraryKey)/all?\(filter)"))
+            // Build the smart playlist URI per Plex API spec
+            let smartUri = "library://\(server.machineIdentifier)/directory//library/sections/\(sectionId)/all?type=10&\(filter)"
+            queryItems.append(URLQueryItem(name: "uri", value: smartUri))
         }
         
         if let limit = limit {
