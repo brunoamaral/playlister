@@ -13,7 +13,9 @@ struct TrackRow: View {
     var showsPlayButton: Bool = true
     var showsAddButton: Bool = false
     var isPendingAdd: Bool = false
+    var isSelectionMode: Bool = false
     var onAdd: (() -> Void)? = nil
+    var onSelectionToggle: (() -> Void)? = nil
     
     @StateObject private var audioService = AudioPreviewService.shared
     @State private var isHovered = false
@@ -22,6 +24,18 @@ struct TrackRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
+            // Selection checkbox (shown in selection mode)
+            if isSelectionMode {
+                Button {
+                    onSelectionToggle?()
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            
             // Artwork
             artwork
             
@@ -61,12 +75,26 @@ struct TrackRow: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .background(isPendingAdd ? Color.green.opacity(0.1) : Color.clear)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(backgroundColor)
+        )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
+    }
+    
+    // MARK: - Background Color
+    
+    private var backgroundColor: Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.15)
+        } else if isPendingAdd {
+            return Color.green.opacity(0.1)
+        }
+        return Color.clear
     }
     
     // MARK: - Artwork
@@ -139,9 +167,10 @@ struct TrackRow: View {
     List {
         TrackRow(track: .sample)
         TrackRow(track: .sample, isPlaying: true)
-        TrackRow(track: .sample, showsAddButton: true) {
+        TrackRow(track: .sample, isSelected: true, isSelectionMode: true)
+        TrackRow(track: .sample, showsAddButton: true, onAdd: {
             print("Add tapped")
-        }
+        })
     }
     .frame(width: 400, height: 300)
 }

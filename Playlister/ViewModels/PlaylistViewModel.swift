@@ -21,9 +21,12 @@ final class PlaylistViewModel: ObservableObject {
                     newPlaylistDescription = ""
                     pendingTracks = []
                 }
+                // Clear selection when changing playlists
+                clearSelection()
                 Task { await fetchTracks(for: playlist) }
             } else {
                 currentTracks = []
+                clearSelection()
             }
         }
     }
@@ -31,6 +34,10 @@ final class PlaylistViewModel: ObservableObject {
     @Published private(set) var isLoadingTracks: Bool = false
     @Published private(set) var error: Error?
     @Published var showErrorAlert: Bool = false
+    
+    // Multi-selection for track reordering
+    @Published var selectedTrackIds: Set<String> = []
+    @Published var isSelectionModeActive: Bool = false
     
     // For new playlist creation
     @Published var isCreatingNewPlaylist: Bool = false
@@ -391,6 +398,221 @@ final class PlaylistViewModel: ObservableObject {
             await fetchTracks(for: playlist)
             undoStack.removeLast()
         }
+    }
+    
+    // MARK: - Multi-Selection Operations
+    
+    /// Toggle selection mode
+    func toggleSelectionMode() {
+        isSelectionModeActive.toggle()
+        if !isSelectionModeActive {
+            clearSelection()
+        }
+    }
+    
+    /// Toggle selection for a track
+    func toggleTrackSelection(_ item: PlaylistItem) {
+        if selectedTrackIds.contains(item.id) {
+            selectedTrackIds.remove(item.id)
+        } else {
+            selectedTrackIds.insert(item.id)
+        }
+    }
+    
+    /// Select a track
+    func selectTrack(_ item: PlaylistItem) {
+        selectedTrackIds.insert(item.id)
+    }
+    
+    /// Deselect a track
+    func deselectTrack(_ item: PlaylistItem) {
+        selectedTrackIds.remove(item.id)
+    }
+    
+    /// Clear all selections
+    func clearSelection() {
+        selectedTrackIds.removeAll()
+        isSelectionModeActive = false
+    }
+    
+    /// Select all tracks
+    func selectAllTracks() {
+        selectedTrackIds = Set(currentTracks.map { $0.id })
+    }
+    
+    /// Check if a track is selected
+    func isTrackSelected(_ item: PlaylistItem) -> Bool {
+        selectedTrackIds.contains(item.id)
+    }
+    
+    /// Get the selected tracks in their current order
+    var selectedTracks: [PlaylistItem] {
+        currentTracks.filter { selectedTrackIds.contains($0.id) }
+    }
+    
+    /// Move selected tracks via drag to a destination index (used by List onMove)
+    /// - Parameter destination: The destination index from the List's onMove
+    func moveSelectedTracksViaDrag(to destination: Int) async {
+        guard let playlist = selectedPlaylist else { return }
+        guard !selectedTrackIds.isEmpty else { return }
+        
+        // Get selected items in their current order
+        let itemsToMove = selectedTracks
+        guard !itemsToMove.isEmpty else { return }
+        
+        // Find the indices of selected items
+        let selectedIndices = currentTracks.enumerated()
+            .filter { selectedTrackIds.contains($0.element.id) }
+            .map { $0.offset }
+        
+        guard let firstSelectedIndex = selectedIndices.first else { return }
+        
+        // Calculate the actual destination considering the selection
+        // When dragging down, the destination needs adjustment
+        var adjustedDestination = destination
+        if destination > firstSelectedIndex {
+            // Count how many selected items are before the destination
+            let selectedBeforeDestination = selectedIndices.filter { $0 < destination }.count
+            adjustedDestination = destination - selectedBeforeDestination
+        }
+        
+        // Calculate the "after" item ID
+        let afterItemId: String?
+        if adjustedDestination == 0 {
+            afterItemId = nil // Move to beginning
+        } else {
+            // Find items that are NOT selected
+            let nonSelectedItems = currentTracks.filter { !selectedTrackIds.contains($0.id) }
+            let targetIndex = min(adjustedDestination - 1, nonSelectedItems.count - 1)
+            if targetIndex >= 0 && targetIndex < nonSelectedItems.count {
+                afterItemId = nonSelectedItems[targetIndex].playlistItemID
+            } else {
+                afterItemId = nil
+            }
+        }
+        
+        // Store original tracks for undo/revert
+        let originalTracks = currentTracks
+        
+        // Optimistic update: reorder locally first
+        var newTracks = currentTracks.filter { !selectedTrackIds.contains($0.id) }
+        let insertIndex = min(adjustedDestination, newTracks.count)
+        newTracks.insert(contentsOf: itemsToMove, at: insertIndex)
+        currentTracks = newTracks
+        
+        // Move items one by one via API (Plex doesn't support batch move)
+        var currentAfterItemId = afterItemId
+        var success = true
+        
+        for item in itemsToMove {
+            do {
+                try await plexService.movePlaylistItem(
+                    playlistId: playlist.id,
+                    playlistItemId: item.playlistItemID,
+                    afterItemId: currentAfterItemId
+                )
+                currentAfterItemId = item.playlistItemID
+            } catch {
+                success = false
+                self.error = error
+                break
+            }
+        }
+        
+        if !success {
+            currentTracks = originalTracks
+            await fetchTracks(for: playlist)
+        }
+        
+        // Keep selection active so user can continue adjusting
+    }
+    
+    /// Move selected tracks to a destination index
+    /// - Parameter destinationIndex: The index where selected tracks should be moved (0 = beginning)
+    func moveSelectedTracks(to destinationIndex: Int) async {
+        guard let playlist = selectedPlaylist else { return }
+        guard !selectedTrackIds.isEmpty else { return }
+        
+        // Get selected items in their current order
+        let itemsToMove = selectedTracks
+        guard !itemsToMove.isEmpty else { return }
+        
+        // Calculate the "after" item ID
+        // We need to find the item that should be before our moved items
+        let afterItemId: String?
+        if destinationIndex == 0 {
+            afterItemId = nil // Move to beginning
+        } else {
+            // Find items that are NOT selected and come before the destination
+            let nonSelectedItems = currentTracks.filter { !selectedTrackIds.contains($0.id) }
+            let targetIndex = min(destinationIndex - 1, nonSelectedItems.count - 1)
+            if targetIndex >= 0 && targetIndex < nonSelectedItems.count {
+                afterItemId = nonSelectedItems[targetIndex].playlistItemID
+            } else {
+                afterItemId = nil
+            }
+        }
+        
+        // Store original tracks for undo/revert
+        let originalTracks = currentTracks
+        
+        // Optimistic update: reorder locally first
+        var newTracks = currentTracks.filter { !selectedTrackIds.contains($0.id) }
+        let insertIndex = min(destinationIndex, newTracks.count)
+        newTracks.insert(contentsOf: itemsToMove, at: insertIndex)
+        currentTracks = newTracks
+        
+        // Move items one by one via API (Plex doesn't support batch move)
+        // We move them in order, each one after the previous
+        var currentAfterItemId = afterItemId
+        var success = true
+        
+        for item in itemsToMove {
+            do {
+                try await plexService.movePlaylistItem(
+                    playlistId: playlist.id,
+                    playlistItemId: item.playlistItemID,
+                    afterItemId: currentAfterItemId
+                )
+                // The next item should be placed after this one
+                currentAfterItemId = item.playlistItemID
+            } catch {
+                success = false
+                self.error = error
+                break
+            }
+        }
+        
+        if !success {
+            // Revert on failure
+            currentTracks = originalTracks
+            await fetchTracks(for: playlist)
+        }
+        
+        // Clear selection after move
+        clearSelection()
+    }
+    
+    /// Remove all selected tracks from the playlist
+    func removeSelectedTracks() async {
+        guard let playlist = selectedPlaylist else { return }
+        guard !selectedTrackIds.isEmpty else { return }
+        
+        let itemsToRemove = selectedTracks
+        
+        for item in itemsToRemove {
+            do {
+                try await plexService.removeFromPlaylist(
+                    playlistId: playlist.id,
+                    playlistItemId: item.playlistItemID
+                )
+                currentTracks.removeAll { $0.id == item.id }
+            } catch {
+                self.error = error
+            }
+        }
+        
+        clearSelection()
     }
     
     // MARK: - Undo Support

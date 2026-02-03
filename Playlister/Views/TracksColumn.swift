@@ -43,6 +43,12 @@ struct TracksColumn: View {
             
             Divider()
             
+            // Selection toolbar (shown when in selection mode)
+            if viewModel.isSelectionModeActive {
+                selectionToolbar
+                Divider()
+            }
+            
             // Tracks
             if viewModel.isLoadingTracks {
                 Spacer()
@@ -51,30 +57,93 @@ struct TracksColumn: View {
             } else if viewModel.currentTracks.isEmpty {
                 emptyPlaylist
             } else {
-                List {
+                List(selection: $viewModel.selectedTrackIds) {
                     ForEach(viewModel.currentTracks) { item in
                         TrackRow(
                             track: item.track,
                             isPlaying: audioService.currentTrack?.id == item.track.id && audioService.isPlaying,
-                            showsPlayButton: true
+                            isSelected: viewModel.isTrackSelected(item),
+                            showsPlayButton: true,
+                            isSelectionMode: viewModel.isSelectionModeActive
                         )
+                        .tag(item.id)
                         .contextMenu {
                             trackContextMenu(for: item)
                         }
                     }
                     .onMove { source, destination in
                         Task {
-                            await viewModel.moveTrack(from: source, to: destination)
+                            // If we have multiple selections and we're moving one of them
+                            if viewModel.selectedTrackIds.count > 1,
+                               let sourceIndex = source.first,
+                               viewModel.selectedTrackIds.contains(viewModel.currentTracks[sourceIndex].id) {
+                                await viewModel.moveSelectedTracksViaDrag(to: destination)
+                            } else {
+                                await viewModel.moveTrack(from: source, to: destination)
+                            }
                         }
                     }
                     .onDelete { indexSet in
                         deleteTrack(at: indexSet)
                     }
                 }
-                .listStyle(.inset)
+                .listStyle(.inset(alternatesRowBackgrounds: true))
             }
         }
         .navigationTitle(playlist.title)
+    }
+    
+    // MARK: - Selection Toolbar
+    
+    private var selectionToolbar: some View {
+        HStack(spacing: 16) {
+            // Selection count with hint
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(viewModel.selectedTrackIds.count) selected")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if viewModel.selectedTrackIds.count > 0 {
+                    Text("Use the drag handles to reorder")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            
+            Spacer()
+            
+            // Select All / Deselect All
+            Button {
+                if viewModel.selectedTrackIds.count == viewModel.currentTracks.count {
+                    viewModel.clearSelection()
+                } else {
+                    viewModel.selectAllTracks()
+                }
+            } label: {
+                Text(viewModel.selectedTrackIds.count == viewModel.currentTracks.count ? "Deselect All" : "Select All")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.borderless)
+            
+            // Remove button
+            Button(role: .destructive) {
+                Task { await viewModel.removeSelectedTracks() }
+            } label: {
+                Label("Remove", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.selectedTrackIds.isEmpty)
+            
+            // Cancel selection mode
+            Button {
+                viewModel.clearSelection()
+            } label: {
+                Text("Done")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color.secondary.opacity(0.1))
     }
     
     // MARK: - Playlist Header
@@ -161,16 +230,29 @@ struct TracksColumn: View {
             
             Spacer()
             
-            // Play all button
+            // Action buttons
             if !viewModel.currentTracks.isEmpty {
-                Button {
-                    if let firstTrack = viewModel.currentTracks.first {
-                        audioService.play(firstTrack.track)
+                HStack(spacing: 8) {
+                    // Select button (for multi-select mode)
+                    if !playlist.smart && !viewModel.isSelectionModeActive {
+                        Button {
+                            viewModel.toggleSelectionMode()
+                        } label: {
+                            Label("Select", systemImage: "checkmark.circle")
+                        }
+                        .buttonStyle(.bordered)
                     }
-                } label: {
-                    Label("Play", systemImage: "play.fill")
+                    
+                    // Play all button
+                    Button {
+                        if let firstTrack = viewModel.currentTracks.first {
+                            audioService.play(firstTrack.track)
+                        }
+                    } label: {
+                        Label("Play", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .padding()
@@ -280,6 +362,35 @@ struct TracksColumn: View {
         }
         
         Divider()
+        
+        // Selection options
+        if viewModel.isSelectionModeActive {
+            if viewModel.isTrackSelected(item) {
+                Button {
+                    viewModel.deselectTrack(item)
+                } label: {
+                    Label("Deselect", systemImage: "circle")
+                }
+            } else {
+                Button {
+                    viewModel.selectTrack(item)
+                } label: {
+                    Label("Select", systemImage: "checkmark.circle")
+                }
+            }
+            
+            Divider()
+        } else {
+            // Quick select option when not in selection mode
+            Button {
+                viewModel.toggleSelectionMode()
+                viewModel.selectTrack(item)
+            } label: {
+                Label("Select to Reorder", systemImage: "checkmark.circle")
+            }
+            
+            Divider()
+        }
         
         Button(role: .destructive) {
             Task { await viewModel.removeTrack(item) }

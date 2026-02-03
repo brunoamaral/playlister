@@ -13,6 +13,7 @@ A native macOS app for managing Plex music playlists.
 - **Import Playlists**: Import from text files or paste track lists (Artist - Title format)
 - **Audio Preview**: Listen to tracks before adding them to playlists
 - **Drag & Drop**: Easily reorder tracks within playlists
+- **Multi-Select Reordering**: Select multiple tracks (⌘+Click) and drag them to reorder as a group
 - **Plex OAuth**: Secure authentication with your Plex account
 - **Self-Signed SSL Support**: Works with home servers using self-signed certificates
 
@@ -57,6 +58,14 @@ cp -R build/Release/Playlister.app /Applications/
 3. **Browse Playlists**: View and manage your playlists in the left column
 4. **Search Tracks**: Use the search bar to find tracks in your library
 5. **Add Tracks**: Click the + button or drag tracks to add them to playlists
+
+### Reordering Tracks
+
+- **Single Track**: Drag any track to reorder it within the playlist
+- **Multiple Tracks**: 
+  - Use ⌘+Click to select multiple tracks, or click "Select" in the playlist header
+  - Once tracks are selected, drag any selected track to move them all together
+  - Click "Done" or press Escape to exit selection mode
 
 ### Smart Playlists
 
