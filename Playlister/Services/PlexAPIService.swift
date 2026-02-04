@@ -564,10 +564,13 @@ actor PlexAPIService {
     // MARK: - Search
     
     /// Search for tracks across all music libraries
+    /// Improved to handle "artist title" queries by searching multiple ways and ranking results
     func searchTracks(query: String, libraryKey: String? = nil) async throws -> [Track] {
         guard let server = currentServer, let token = authToken else {
             throw PlexAPIError.notConnected
         }
+        
+        let trimmedQuery = query.trimmingCharacters(in: .whitespaces).lowercased()
         
         // If no library key provided, search all
         let searchPath: String
@@ -577,7 +580,111 @@ actor PlexAPIService {
             searchPath = "/search"
         }
         
-        var components = URLComponents(string: server.baseURL + searchPath)!
+        // Perform the main search
+        var allResults: [Track] = []
+        
+        // Search 1: Full query (might find exact matches)
+        let fullQueryResults = try await performSearch(
+            path: searchPath,
+            query: query,
+            server: server,
+            token: token
+        )
+        allResults.append(contentsOf: fullQueryResults)
+        
+        // If query has multiple words, try searching by individual words
+        let words = trimmedQuery.split(separator: " ").map(String.init)
+        if words.count >= 2 {
+            // Search 2: Just the first word (might be artist)
+            let firstWordResults = try await performSearch(
+                path: searchPath,
+                query: words[0],
+                server: server,
+                token: token
+            )
+            
+            // Search 3: Just the last word (might be title)
+            let lastWordResults = try await performSearch(
+                path: searchPath,
+                query: words.last!,
+                server: server,
+                token: token
+            )
+            
+            allResults.append(contentsOf: firstWordResults)
+            allResults.append(contentsOf: lastWordResults)
+        }
+        
+        // Remove duplicates by track ID
+        var seenIds = Set<String>()
+        var uniqueResults: [Track] = []
+        for track in allResults {
+            if !seenIds.contains(track.id) {
+                seenIds.insert(track.id)
+                uniqueResults.append(track)
+            }
+        }
+        
+        // Score and sort results based on how well they match the query
+        let scoredResults = uniqueResults.map { track -> (Track, Int) in
+            var score = 0
+            let titleLower = track.title.lowercased()
+            let artistLower = track.artistName.lowercased()
+            let albumLower = track.albumName.lowercased()
+            
+            // Exact title match
+            if words.contains(where: { titleLower == $0 }) {
+                score += 100
+            }
+            // Title contains a word from query
+            for word in words {
+                if titleLower.contains(word) {
+                    score += 30
+                }
+            }
+            
+            // Artist contains words from query
+            for word in words {
+                if artistLower.contains(word) {
+                    score += 25
+                }
+            }
+            
+            // Album contains words from query
+            for word in words {
+                if albumLower.contains(word) {
+                    score += 10
+                }
+            }
+            
+            // Bonus if both artist AND title match different words
+            let artistWords = Set(artistLower.split(separator: " ").map(String.init))
+            let titleWords = Set(titleLower.split(separator: " ").map(String.init))
+            let queryWords = Set(words)
+            
+            let artistMatches = !artistWords.isDisjoint(with: queryWords)
+            let titleMatches = !titleWords.isDisjoint(with: queryWords)
+            
+            if artistMatches && titleMatches {
+                score += 50
+            }
+            
+            return (track, score)
+        }
+        
+        // Sort by score (highest first), then filter out zero scores
+        let sortedResults = scoredResults
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .map { $0.0 }
+        
+        // Limit to 50 results
+        return Array(sortedResults.prefix(50))
+    }
+    
+    /// Helper function to perform a single search
+    private func performSearch(path: String, query: String, server: PlexServer, token: String) async throws -> [Track] {
+        var components = URLComponents(string: server.baseURL + path)!
         components.queryItems = [
             URLQueryItem(name: "query", value: query),
             URLQueryItem(name: "type", value: "10"), // 10 = track
@@ -592,15 +699,12 @@ actor PlexAPIService {
         
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
-            throw PlexAPIError.serverError
+            return []
         }
         
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let container = json["MediaContainer"] as? [String: Any] else {
-            throw PlexAPIError.invalidResponse
-        }
-        
-        guard let metadata = container["Metadata"] as? [[String: Any]] else {
+              let container = json["MediaContainer"] as? [String: Any],
+              let metadata = container["Metadata"] as? [[String: Any]] else {
             return []
         }
         

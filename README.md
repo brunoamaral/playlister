@@ -9,6 +9,7 @@ A native macOS app for managing Plex music playlists.
 ## Features
 
 - **Three-Column Layout**: Browse playlists, view tracks, and search your library
+- **Smart Search**: Search by "artist title" (e.g., "foo fighters home") with intelligent result ranking
 - **Smart Playlists**: Create dynamic playlists with custom rules and filters
 - **Import Playlists**: Import from CSV files (Spotify/Spotlistr exports), text files, or paste track lists
 - **Export Playlists**: Export any playlist to CSV with full Plex metadata
