@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Playlists Column (Column 1)
 
@@ -13,6 +14,8 @@ struct PlaylistsColumn: View {
     @State private var isShowingSmartPlaylistSheet = false
     @State private var isShowingImportSheet = false
     @State private var editingSmartPlaylist: Playlist?
+    @State private var isShowingExportPanel = false
+    @State private var playlistToExport: Playlist?
     
     // MARK: - Computed Properties
     
@@ -180,6 +183,12 @@ struct PlaylistsColumn: View {
             Label("Show Tracks", systemImage: "list.bullet")
         }
         
+        Button {
+            exportPlaylist(playlist)
+        } label: {
+            Label("Export to CSV...", systemImage: "square.and.arrow.up")
+        }
+        
         Divider()
         
         Button(role: .destructive) {
@@ -204,6 +213,12 @@ struct PlaylistsColumn: View {
             Label("Edit Smart Playlist...", systemImage: "pencil")
         }
         
+        Button {
+            exportPlaylist(playlist)
+        } label: {
+            Label("Export to CSV...", systemImage: "square.and.arrow.up")
+        }
+        
         Divider()
         
         Button(role: .destructive) {
@@ -226,6 +241,70 @@ struct PlaylistsColumn: View {
             let playlist = playlists[index]
             Task { await viewModel.deletePlaylist(playlist) }
         }
+    }
+    
+    private func exportPlaylist(_ playlist: Playlist) {
+        Task {
+            // Fetch tracks for the playlist if needed
+            var tracks = viewModel.currentTracks.map { $0.track }
+            if viewModel.selectedPlaylist?.id != playlist.id || tracks.isEmpty {
+                // Need to fetch tracks for this playlist
+                if let fetchedTracks = try? await viewModel.fetchTracksForExport(playlist: playlist) {
+                    tracks = fetchedTracks
+                }
+            }
+            
+            guard !tracks.isEmpty else { return }
+            
+            // Generate CSV content
+            let csvContent = generateCSV(from: tracks, playlistTitle: playlist.title)
+            
+            // Show save panel
+            let savePanel = NSSavePanel()
+            savePanel.allowedContentTypes = [.commaSeparatedText]
+            savePanel.nameFieldStringValue = "\(playlist.title).csv"
+            savePanel.title = "Export Playlist"
+            savePanel.message = "Choose where to save the playlist CSV file"
+            
+            let response = await savePanel.beginSheetModal(for: NSApp.keyWindow!)
+            
+            if response == .OK, let url = savePanel.url {
+                do {
+                    try csvContent.write(to: url, atomically: true, encoding: .utf8)
+                } catch {
+                    print("Failed to save CSV: \(error)")
+                }
+            }
+        }
+    }
+    
+    private func generateCSV(from tracks: [Track], playlistTitle: String) -> String {
+        var csv = "\"Artist\",\"Album\",\"Track Title\",\"Duration\",\"Year\",\"Genre\",\"Rating\",\"Play Count\",\"Date Added\",\"Last Played\"\n"
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .none
+        
+        for track in tracks {
+            let artist = escapeCSV(track.artistName)
+            let album = escapeCSV(track.albumName)
+            let title = escapeCSV(track.title)
+            let duration = track.formattedDuration
+            let year = track.year.map { String($0) } ?? ""
+            let genre = escapeCSV(track.genre ?? "")
+            let rating = track.rating.map { String(format: "%.1f", $0 / 2) } ?? ""  // Convert 0-10 to 0-5
+            let playCount = track.playCount.map { String($0) } ?? "0"
+            let dateAdded = track.addedAt.map { dateFormatter.string(from: $0) } ?? ""
+            let lastPlayed = track.lastViewedAt.map { dateFormatter.string(from: $0) } ?? ""
+            
+            csv += "\"\(artist)\",\"\(album)\",\"\(title)\",\"\(duration)\",\"\(year)\",\"\(genre)\",\"\(rating)\",\"\(playCount)\",\"\(dateAdded)\",\"\(lastPlayed)\"\n"
+        }
+        
+        return csv
+    }
+    
+    private func escapeCSV(_ value: String) -> String {
+        value.replacingOccurrences(of: "\"", with: "\"\"")
     }
 }
 

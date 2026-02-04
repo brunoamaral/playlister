@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 // MARK: - Import Playlist View
 
-/// View for importing playlists from text files or direct text input
+/// View for importing playlists from text files, CSV, or direct text input
 struct ImportPlaylistView: View {
     
     // MARK: - Environment
@@ -61,7 +61,7 @@ struct ImportPlaylistView: View {
         .frame(width: 600, height: 700)
         .fileImporter(
             isPresented: $importViewModel.isShowingFilePicker,
-            allowedContentTypes: [.plainText],
+            allowedContentTypes: [.plainText, .commaSeparatedText],
             allowsMultipleSelection: false
         ) { result in
             importViewModel.handleFileImport(result)
@@ -116,9 +116,16 @@ struct ImportPlaylistView: View {
                 .buttonStyle(.bordered)
             }
             
-            Text("Enter one song per line in the format: **Artist - Song Title**")
+            Text("Supported formats:")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("• **CSV**: With columns \"Artist(s) Name\" and \"Track Name\" (Spotify/Spotlistr export)")
+                Text("• **Text**: One song per line as **Artist - Song Title**")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
             
             TextEditor(text: $importViewModel.rawText)
                 .font(.system(.body, design: .monospaced))
@@ -176,16 +183,44 @@ struct ImportPlaylistView: View {
                 
                 Spacer()
                 
-                Text("\(importViewModel.matchedCount) found, \(importViewModel.missingCount) missing")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Label("\(importViewModel.matchedCount)", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    if importViewModel.needsSelectionCount > 0 {
+                        Label("\(importViewModel.needsSelectionCount)", systemImage: "questionmark.circle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    if importViewModel.missingCount > 0 {
+                        Label("\(importViewModel.missingCount)", systemImage: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+                .font(.subheadline)
+            }
+            
+            // Warning if selections needed
+            if importViewModel.needsSelectionCount > 0 {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("Please select a version for \(importViewModel.needsSelectionCount) track(s) before creating the playlist")
+                        .font(.caption)
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             
             // Filter tabs
             Picker("Filter", selection: $importViewModel.resultFilter) {
                 Text("All (\(importViewModel.parsedEntries.count))").tag(ImportResultFilter.all)
-                Text("Found (\(importViewModel.matchedCount))").tag(ImportResultFilter.found)
-                Text("Missing (\(importViewModel.missingCount))").tag(ImportResultFilter.missing)
+                Text("Ready (\(importViewModel.matchedCount))").tag(ImportResultFilter.found)
+                if importViewModel.needsSelectionCount > 0 {
+                    Text("Select (\(importViewModel.needsSelectionCount))").tag(ImportResultFilter.needsSelection)
+                }
+                if importViewModel.missingCount > 0 {
+                    Text("Missing (\(importViewModel.missingCount))").tag(ImportResultFilter.missing)
+                }
             }
             .pickerStyle(.segmented)
             
@@ -240,14 +275,17 @@ struct ImportPlaylistView: View {
         
         importViewModel.isCreating = true
         
+        // Dismiss immediately so user sees the playlist being populated
+        dismiss()
+        
         do {
             try await playlistViewModel.createPlaylist(
                 name: importViewModel.playlistName,
                 tracks: tracks
             )
-            dismiss()
         } catch {
-            importViewModel.parseError = "Failed to create playlist: \(error.localizedDescription)"
+            // Error will be shown via playlistViewModel.showErrorAlert
+            print("Failed to create playlist: \(error.localizedDescription)")
         }
         
         importViewModel.isCreating = false
@@ -262,6 +300,11 @@ struct ImportEntryRow: View {
     
     @State private var isExpanded = false
     
+    /// Determine if this entry needs user selection (multiple versions found)
+    private var needsSelection: Bool {
+        entry.matchedTrack == nil && !entry.alternatives.isEmpty
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -274,13 +317,20 @@ struct ImportEntryRow: View {
                         .font(.body)
                     
                     if let track = entry.matchedTrack {
-                        Text("→ \(track.artistName) - \(track.title)")
-                            .font(.caption)
-                            .foregroundStyle(.green)
+                        HStack(spacing: 4) {
+                            Text("→ \(track.artistName) - \(track.title)")
+                            if !track.albumName.isEmpty {
+                                Text("(\(track.albumName))")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.green)
                     } else if !entry.alternatives.isEmpty {
-                        Text("No exact match - \(entry.alternatives.count) similar found")
+                        Text("Multiple versions found - please select one ↓")
                             .font(.caption)
                             .foregroundStyle(.orange)
+                            .fontWeight(.medium)
                     } else {
                         Text("Not found in library")
                             .font(.caption)
@@ -290,23 +340,24 @@ struct ImportEntryRow: View {
                 
                 Spacer()
                 
-                // Expand button for alternatives
-                if !entry.alternatives.isEmpty && entry.matchedTrack == nil {
+                // Expand button for alternatives (auto-expanded if needs selection)
+                if needsSelection {
                     Button {
                         withAnimation {
                             isExpanded.toggle()
                         }
                     } label: {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .foregroundStyle(.orange)
                     }
                     .buttonStyle(.borderless)
                 }
             }
             
-            // Alternatives
-            if isExpanded && entry.matchedTrack == nil {
+            // Alternatives - auto-expand when selection is needed
+            if (isExpanded || needsSelection) && entry.matchedTrack == nil && !entry.alternatives.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Did you mean:")
+                    Text("Select the version you want:")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
@@ -317,15 +368,23 @@ struct ImportEntryRow: View {
                             HStack {
                                 Image(systemName: "music.note")
                                     .foregroundStyle(.secondary)
-                                Text("\(track.artistName) - \(track.title)")
-                                    .font(.caption)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("\(track.artistName) - \(track.title)")
+                                        .font(.caption)
+                                    if !track.albumName.isEmpty {
+                                        Text(track.albumName)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
                                 Spacer()
-                                Image(systemName: "plus.circle")
+                                Image(systemName: "checkmark.circle")
+                                    .foregroundStyle(.green)
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 6)
                         .padding(.horizontal, 8)
                         .background(Color(nsColor: .controlBackgroundColor))
                         .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -335,8 +394,12 @@ struct ImportEntryRow: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(needsSelection ? Color.orange.opacity(0.1) : Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(needsSelection ? Color.orange.opacity(0.5) : Color.clear, lineWidth: 1)
+        )
     }
     
     @ViewBuilder
@@ -376,12 +439,16 @@ final class ImportPlaylistViewModel: ObservableObject {
         parsedEntries.filter { $0.matchedTrack != nil }.count
     }
     
+    var needsSelectionCount: Int {
+        parsedEntries.filter { $0.matchedTrack == nil && !$0.alternatives.isEmpty }.count
+    }
+    
     var missingCount: Int {
-        parsedEntries.filter { $0.matchedTrack == nil }.count
+        parsedEntries.filter { $0.matchedTrack == nil && $0.alternatives.isEmpty }.count
     }
     
     var canCreatePlaylist: Bool {
-        !playlistName.isEmpty && matchedCount > 0
+        !playlistName.isEmpty && matchedCount > 0 && needsSelectionCount == 0
     }
     
     var tracksToAdd: [Track] {
@@ -394,8 +461,10 @@ final class ImportPlaylistViewModel: ObservableObject {
             return parsedEntries
         case .found:
             return parsedEntries.filter { $0.matchedTrack != nil }
+        case .needsSelection:
+            return parsedEntries.filter { $0.matchedTrack == nil && !$0.alternatives.isEmpty }
         case .missing:
-            return parsedEntries.filter { $0.matchedTrack == nil }
+            return parsedEntries.filter { $0.matchedTrack == nil && $0.alternatives.isEmpty }
         }
     }
     
@@ -445,19 +514,146 @@ final class ImportPlaylistViewModel: ObservableObject {
         parseError = nil
         isSearching = true
         
-        // Parse lines
-        let lines = rawText
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        // Detect format and parse
+        let parsedLines = parseInput(rawText)
         
-        guard !lines.isEmpty else {
+        guard !parsedLines.isEmpty else {
             parseError = "No songs found in the input"
             isSearching = false
             return
         }
         
         var entries: [ImportEntry] = []
+        
+        for (artist, title) in parsedLines {
+            // Search for the track
+            let (matchedTrack, alternatives) = await searchTrack(artist: artist, title: title)
+            
+            let displayText = artist.isEmpty ? title : "\(artist) - \(title)"
+            let entry = ImportEntry(
+                originalText: displayText,
+                parsedArtist: artist,
+                parsedTitle: title,
+                matchedTrack: matchedTrack,
+                alternatives: alternatives
+            )
+            entries.append(entry)
+        }
+        
+        parsedEntries = entries
+        isSearching = false
+    }
+    
+    // MARK: - Input Parsing
+    
+    /// Detect and parse input format (CSV or plain text)
+    private func parseInput(_ text: String) -> [(artist: String, title: String)] {
+        let lines = text
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        guard !lines.isEmpty else { return [] }
+        
+        // Check if it's CSV format (has header with Artist and Track columns)
+        // Also handle common typo "Arist" instead of "Artist" (Spotlistr export)
+        let firstLine = lines[0].lowercased()
+        let hasArtistColumn = firstLine.contains("artist") || firstLine.contains("arist")
+        let hasTrackColumn = firstLine.contains("track") || firstLine.contains("title") || firstLine.contains("song")
+        
+        // Also detect CSV by checking if first line contains comma and looks like a header
+        let looksLikeCSVHeader = firstLine.contains(",") && hasTrackColumn
+        
+        if (hasArtistColumn && hasTrackColumn) || looksLikeCSVHeader {
+            return parseCSV(lines)
+        }
+        
+        // Otherwise, parse as plain text (Artist - Title format)
+        return parsePlainText(lines)
+    }
+    
+    /// Parse CSV format (Spotify/Spotlistr export)
+    private func parseCSV(_ lines: [String]) -> [(artist: String, title: String)] {
+        guard lines.count > 1 else { return [] }
+        
+        // Parse header to find column indices
+        let header = parseCSVLine(lines[0])
+        let headerLower = header.map { $0.lowercased() }
+        
+        // Find artist column (could be "Artist(s) Name", "Artist", "Artists", "Arist" (typo), etc.)
+        let artistIndex = headerLower.firstIndex { col in
+            col.contains("artist") || col.contains("arist")
+        }
+        
+        // Find track column (could be "Track Name", "Track", "Title", "Song", etc.)
+        let trackIndex = headerLower.firstIndex { col in
+            col.contains("track") || col.contains("title") || col.contains("song")
+        }
+        
+        // If we can't find specific columns, check if we have exactly 2 columns
+        if artistIndex == nil || trackIndex == nil || artistIndex == trackIndex {
+            if header.count >= 2 {
+                // Assume first column is artist, second is track
+                return parseCSVWithIndices(lines, artistIndex: 0, trackIndex: 1)
+            }
+            return []
+        }
+        
+        return parseCSVWithIndices(lines, artistIndex: artistIndex!, trackIndex: trackIndex!)
+    }
+    
+    private func parseCSVWithIndices(_ lines: [String], artistIndex: Int, trackIndex: Int) -> [(artist: String, title: String)] {
+        var results: [(String, String)] = []
+        
+        // Skip header, process data rows
+        for line in lines.dropFirst() {
+            let columns = parseCSVLine(line)
+            
+            guard columns.count > max(artistIndex, trackIndex) else { continue }
+            
+            var artist = columns[artistIndex].trimmingCharacters(in: .whitespaces)
+            let title = columns[trackIndex].trimmingCharacters(in: .whitespaces)
+            
+            guard !title.isEmpty else { continue }
+            
+            // Handle multiple artists separated by semicolons (Spotify format)
+            // e.g., "Carla Gugino; Oscar Isaac" -> use first artist
+            if artist.contains(";") {
+                artist = artist.components(separatedBy: ";").first?.trimmingCharacters(in: .whitespaces) ?? artist
+            }
+            
+            results.append((artist, title))
+        }
+        
+        return results
+    }
+    
+    /// Parse a single CSV line, handling quoted fields
+    private func parseCSVLine(_ line: String) -> [String] {
+        var fields: [String] = []
+        var currentField = ""
+        var inQuotes = false
+        
+        for char in line {
+            if char == "\"" {
+                inQuotes.toggle()
+            } else if char == "," && !inQuotes {
+                fields.append(currentField.trimmingCharacters(in: .whitespaces))
+                currentField = ""
+            } else {
+                currentField.append(char)
+            }
+        }
+        
+        // Add the last field
+        fields.append(currentField.trimmingCharacters(in: .whitespaces))
+        
+        return fields
+    }
+    
+    /// Parse plain text format (Artist - Title per line)
+    private func parsePlainText(_ lines: [String]) -> [(artist: String, title: String)] {
+        var results: [(String, String)] = []
         
         for line in lines {
             // Parse "Artist - Title" format
@@ -475,21 +671,12 @@ final class ImportPlaylistViewModel: ObservableObject {
                 title = line
             }
             
-            // Search for the track
-            let (matchedTrack, alternatives) = await searchTrack(artist: artist, title: title)
-            
-            let entry = ImportEntry(
-                originalText: line,
-                parsedArtist: artist,
-                parsedTitle: title,
-                matchedTrack: matchedTrack,
-                alternatives: alternatives
-            )
-            entries.append(entry)
+            if !title.isEmpty {
+                results.append((artist, title))
+            }
         }
         
-        parsedEntries = entries
-        isSearching = false
+        return results
     }
     
     // MARK: - Search Track
@@ -527,15 +714,22 @@ final class ImportPlaylistViewModel: ObservableObject {
                 }
             }
             
-            // Return best match
-            if let exact = exactMatches.first {
-                return (exact, [])
+            // If we have exactly ONE exact match, auto-select it
+            if exactMatches.count == 1 {
+                return (exactMatches.first, [])
             }
             
-            // If we have partial matches, return the shortest (most likely the original version)
+            // If we have MULTIPLE exact matches, user must pick
+            if exactMatches.count > 1 {
+                // Sort by album to group versions, then return all as alternatives
+                let sorted = exactMatches.sorted { ($0.albumName, $0.title) < ($1.albumName, $1.title) }
+                return (nil, sorted)
+            }
+            
+            // If we have partial matches, user must pick (could be different versions, remixes, etc.)
             if !partialMatches.isEmpty {
                 let sorted = partialMatches.sorted { $0.title.count < $1.title.count }
-                return (sorted.first, Array(sorted.dropFirst().prefix(5)))
+                return (nil, Array(sorted.prefix(10)))
             }
             
             // No match found, search by artist for alternatives
@@ -617,8 +811,14 @@ final class ImportPlaylistViewModel: ObservableObject {
     
     func selectAlternative(for entryId: UUID, track: Track) {
         guard let index = parsedEntries.firstIndex(where: { $0.id == entryId }) else { return }
-        parsedEntries[index].matchedTrack = track
-        parsedEntries[index].alternatives = []
+        // Create a new entry with the selected track to ensure SwiftUI detects the change
+        var updatedEntry = parsedEntries[index]
+        updatedEntry.matchedTrack = track
+        updatedEntry.alternatives = []
+        parsedEntries[index] = updatedEntry
+        
+        // Force objectWillChange to ensure UI updates
+        objectWillChange.send()
     }
     
     func clear() {
@@ -644,5 +844,6 @@ struct ImportEntry: Identifiable {
 enum ImportResultFilter {
     case all
     case found
+    case needsSelection
     case missing
 }

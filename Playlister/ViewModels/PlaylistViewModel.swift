@@ -103,6 +103,12 @@ final class PlaylistViewModel: ObservableObject {
         isLoadingTracks = false
     }
     
+    /// Fetch tracks for export (doesn't update currentTracks)
+    func fetchTracksForExport(playlist: Playlist) async throws -> [Track] {
+        let playlistItems = try await plexService.fetchPlaylistTracks(playlistId: playlist.id)
+        return playlistItems.map { $0.track }
+    }
+    
     // MARK: - Playlist CRUD
     
     /// Start creating a new playlist
@@ -198,22 +204,89 @@ final class PlaylistViewModel: ObservableObject {
             throw PlexAPIError.playlistRequiresTrack
         }
         
-        guard let libraryKey = libraryKey else {
+        #if DEBUG
+        print("Creating playlist '\(name)' with \(tracks.count) tracks:")
+        for track in tracks {
+            print("  - \(track.artistName) - \(track.title) (ratingKey: \(track.ratingKey))")
+        }
+        #endif
+        
+        // Get the music library key if not already set
+        let libKey: String
+        if let key = libraryKey {
+            libKey = key
+        } else if let key = try await plexService.getMusicLibraryKey() {
+            libKey = key
+            libraryKey = key
+        } else {
             throw PlexAPIError.notConnected
         }
         
-        // Build URIs for all tracks
-        var uris: [String] = []
-        for track in tracks {
-            let uri = await plexService.trackURI(for: track, libraryKey: libraryKey)
-            uris.append(uri)
-        }
+        #if DEBUG
+        print("Using libraryKey: \(libKey)")
+        #endif
         
-        let playlist = try await plexService.createPlaylist(title: name, trackURIs: uris)
+        // Build URI for the first track only
+        let firstURI = await plexService.trackURI(for: tracks[0], libraryKey: libKey)
+        
+        #if DEBUG
+        print("Creating playlist with first track URI: \(firstURI)")
+        #endif
+        
+        // Create playlist with the first track (Plex requires at least one)
+        let playlist = try await plexService.createPlaylist(title: name, trackURIs: [firstURI])
+        
+        #if DEBUG
+        print("Created playlist: \(playlist.title), id: \(playlist.id)")
+        #endif
+        
+        // Insert playlist and select it immediately so user sees it
         playlists.insert(playlist, at: 0)
         selectedPlaylist = playlist
         
-        // Fetch the tracks to show in the middle column
+        // Build list of initial track (just the first one)
+        currentTracks = [PlaylistItem(
+            id: tracks[0].ratingKey,
+            playlistItemID: tracks[0].ratingKey,
+            track: tracks[0],
+            playlistOrder: 0
+        )]
+        
+        // Now add remaining tracks one by one, updating the UI after each
+        if tracks.count > 1 {
+            for i in 1..<tracks.count {
+                let track = tracks[i]
+                let uri = await plexService.trackURI(for: track, libraryKey: libKey)
+                
+                #if DEBUG
+                print("Adding track \(i + 1)/\(tracks.count): \(track.artistName) - \(track.title)")
+                #endif
+                
+                do {
+                    try await plexService.addSingleTrackToPlaylist(playlistId: playlist.id, trackURI: uri)
+                    
+                    // Add track to current view immediately
+                    let newItem = PlaylistItem(
+                        id: "\(playlist.id)-\(i)",
+                        playlistItemID: track.ratingKey,
+                        track: track,
+                        playlistOrder: i
+                    )
+                    currentTracks.append(newItem)
+                    
+                    #if DEBUG
+                    print("Successfully added track \(i + 1)/\(tracks.count)")
+                    #endif
+                } catch {
+                    #if DEBUG
+                    print("Failed to add track \(i + 1): \(error)")
+                    #endif
+                    // Continue with next track even if one fails
+                }
+            }
+        }
+        
+        // Fetch fresh data from server to ensure everything is synced
         await fetchTracks(for: playlist)
     }
     

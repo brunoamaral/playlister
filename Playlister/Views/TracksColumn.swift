@@ -64,7 +64,13 @@ struct TracksColumn: View {
                             isPlaying: audioService.currentTrack?.id == item.track.id && audioService.isPlaying,
                             isSelected: viewModel.isTrackSelected(item),
                             showsPlayButton: true,
-                            isSelectionMode: viewModel.isSelectionModeActive
+                            showsRemoveButton: !viewModel.isSelectionModeActive,
+                            isSelectionMode: viewModel.isSelectionModeActive,
+                            onRemove: {
+                                Task {
+                                    await viewModel.removeTrack(item)
+                                }
+                            }
                         )
                         .tag(item.id)
                         .contextMenu {

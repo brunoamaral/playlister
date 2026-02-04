@@ -12,9 +12,11 @@ struct TrackRow: View {
     var isSelected: Bool = false
     var showsPlayButton: Bool = true
     var showsAddButton: Bool = false
+    var showsRemoveButton: Bool = false
     var isPendingAdd: Bool = false
     var isSelectionMode: Bool = false
     var onAdd: (() -> Void)? = nil
+    var onRemove: (() -> Void)? = nil
     var onSelectionToggle: (() -> Void)? = nil
     
     @StateObject private var audioService = AudioPreviewService.shared
@@ -68,8 +70,8 @@ struct TrackRow: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
             
-            // Action buttons (shown on hover)
-            if isHovered || isPlaying || isPendingAdd {
+        // Action buttons (add/remove buttons always visible when enabled, play on hover)
+            if showsAddButton || showsRemoveButton || isHovered || isPlaying || isPendingAdd {
                 actionButtons
             }
         }
@@ -131,7 +133,7 @@ struct TrackRow: View {
     
     private var actionButtons: some View {
         HStack(spacing: 4) {
-            if showsPlayButton {
+            if showsPlayButton && (isHovered || isPlaying) {
                 Button {
                     if isPlaying {
                         audioService.togglePlayPause()
@@ -146,6 +148,7 @@ struct TrackRow: View {
                 .help(isPlaying ? "Pause" : "Play")
             }
             
+            // Add button - always visible when showsAddButton is true
             if showsAddButton, let onAdd = onAdd {
                 Button {
                     onAdd()
@@ -155,6 +158,19 @@ struct TrackRow: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Add to playlist")
+            }
+            
+            // Remove button - always visible when showsRemoveButton is true
+            if showsRemoveButton, let onRemove = onRemove {
+                Button {
+                    onRemove()
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundStyle(.red)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.borderless)
+                .help("Remove from playlist")
             }
         }
     }

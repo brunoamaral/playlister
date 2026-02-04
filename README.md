@@ -10,7 +10,9 @@ A native macOS app for managing Plex music playlists.
 
 - **Three-Column Layout**: Browse playlists, view tracks, and search your library
 - **Smart Playlists**: Create dynamic playlists with custom rules and filters
-- **Import Playlists**: Import from text files or paste track lists (Artist - Title format)
+- **Import Playlists**: Import from CSV files (Spotify/Spotlistr exports), text files, or paste track lists
+- **Export Playlists**: Export any playlist to CSV with full Plex metadata
+- **Quick Add/Remove**: One-click buttons to add tracks from search or remove from playlists
 - **Audio Preview**: Listen to tracks before adding them to playlists
 - **Drag & Drop**: Easily reorder tracks within playlists
 - **Multi-Select Reordering**: Select multiple tracks (⌘+Click) and drag them to reorder as a group
@@ -57,7 +59,28 @@ cp -R build/Release/Playlister.app /Applications/
 2. **Select Server**: Choose your Plex server and music library
 3. **Browse Playlists**: View and manage your playlists in the left column
 4. **Search Tracks**: Use the search bar to find tracks in your library
-5. **Add Tracks**: Click the + button or drag tracks to add them to playlists
+5. **Add Tracks**: Click the + button next to any search result to add it to the selected playlist
+6. **Remove Tracks**: Click the - button next to any track in a playlist to remove it
+
+### Importing Playlists
+
+Import playlists from various sources:
+
+- **CSV Files**: Supports Spotify/Spotlistr exports with "Artist(s) Name" and "Track Name" columns
+- **Text Files**: One song per line in "Artist - Title" format
+- **Multiple Versions**: When multiple versions of a song exist, you'll be prompted to select which one to add
+
+To import: Right-click in the playlists column → "Import Playlist..."
+
+### Exporting Playlists
+
+Export any playlist to CSV with full metadata:
+
+- Track title, artist, album
+- Duration, genre, year
+- Play count, rating, and more
+
+To export: Right-click on a playlist → "Export to CSV..."
 
 ### Reordering Tracks
 

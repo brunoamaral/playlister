@@ -179,14 +179,15 @@ struct SearchColumn: View {
                 isSelected: viewModel.isSelected(track),
                 showsPlayButton: true,
                 showsAddButton: playlistViewModel.selectedPlaylist != nil || playlistViewModel.isCreatingNewPlaylist,
-                isPendingAdd: playlistViewModel.pendingTracks.contains(where: { $0.id == track.id })
-            ) {
-                if playlistViewModel.isCreatingNewPlaylist {
-                    playlistViewModel.addToPendingPlaylist(track)
-                } else {
-                    addTrackToPlaylist(track)
+                isPendingAdd: playlistViewModel.pendingTracks.contains(where: { $0.id == track.id }),
+                onAdd: {
+                    if playlistViewModel.isCreatingNewPlaylist {
+                        playlistViewModel.addToPendingPlaylist(track)
+                    } else {
+                        addTrackToPlaylist(track)
+                    }
                 }
-            }
+            )
             .tag(track)
             .contextMenu {
                 trackContextMenu(for: track)

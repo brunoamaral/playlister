@@ -342,18 +342,23 @@ actor PlexAPIService {
             throw PlexAPIError.notConnected
         }
         
-        var components = URLComponents(string: server.baseURL + "/playlists")!
-        components.queryItems = [
-            URLQueryItem(name: "type", value: "audio"),
-            URLQueryItem(name: "title", value: title),
-            URLQueryItem(name: "smart", value: "0")
-        ]
+        // Build URL manually to control encoding
+        var urlString = server.baseURL + "/playlists?type=audio&smart=0&title=" + (title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title)
         
         if !trackURIs.isEmpty {
-            components.queryItems?.append(URLQueryItem(name: "uri", value: trackURIs.joined(separator: ",")))
+            // Add URI without extra encoding - Plex expects the server:// format as-is
+            urlString += "&uri=" + trackURIs.joined(separator: ",")
         }
         
-        var request = URLRequest(url: components.url!)
+        #if DEBUG
+        print("Create playlist URL: \(urlString)")
+        #endif
+        
+        guard let url = URL(string: urlString) else {
+            throw PlexAPIError.invalidResponse
+        }
+        
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.allHTTPHeaderFields = PlexHeaders.headers(token: token)
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -463,26 +468,54 @@ actor PlexAPIService {
         }
     }
     
-    /// Add tracks to a playlist
-    func addToPlaylist(playlistId: String, trackURIs: [String]) async throws {
+    /// Add a single track to a playlist
+    func addSingleTrackToPlaylist(playlistId: String, trackURI: String) async throws {
         guard let server = currentServer, let token = authToken else {
             throw PlexAPIError.notConnected
         }
         
-        var components = URLComponents(string: server.baseURL + "/playlists/\(playlistId)/items")!
-        components.queryItems = [
-            URLQueryItem(name: "uri", value: trackURIs.joined(separator: ","))
-        ]
+        // Build URL manually to avoid double-encoding
+        let urlString = server.baseURL + "/playlists/\(playlistId)/items?uri=\(trackURI)"
         
-        var request = URLRequest(url: components.url!)
+        guard let url = URL(string: urlString) else {
+            #if DEBUG
+            print("Failed to create URL from: \(urlString)")
+            #endif
+            throw PlexAPIError.invalidResponse
+        }
+        
+        var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.allHTTPHeaderFields = PlexHeaders.headers(token: token)
         
-        let (_, response) = try await activeSession.data(for: request)
+        #if DEBUG
+        print("Adding track to playlist \(playlistId)")
+        print("  URL: \(urlString)")
+        print("  URI: \(trackURI)")
+        #endif
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        let (data, response) = try await activeSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PlexAPIError.invalidResponse
+        }
+        
+        #if DEBUG
+        print("  Response status: \(httpResponse.statusCode)")
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("  Response body: \(responseString.prefix(500))")
+        }
+        #endif
+        
+        guard httpResponse.statusCode == 200 else {
             throw PlexAPIError.serverError
+        }
+    }
+    
+    /// Add tracks to a playlist (batch - adds one at a time internally)
+    func addToPlaylist(playlistId: String, trackURIs: [String]) async throws {
+        for uri in trackURIs {
+            try await addSingleTrackToPlaylist(playlistId: playlistId, trackURI: uri)
         }
     }
     
