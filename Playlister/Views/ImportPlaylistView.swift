@@ -14,6 +14,7 @@ struct ImportPlaylistView: View {
     
     @ObservedObject var playlistViewModel: PlaylistViewModel
     @StateObject private var importViewModel: ImportPlaylistViewModel
+    @State private var isShowingFilePicker = false
     
     // MARK: - Initialization
     
@@ -60,8 +61,8 @@ struct ImportPlaylistView: View {
         }
         .frame(width: 600, height: 700)
         .fileImporter(
-            isPresented: $importViewModel.isShowingFilePicker,
-            allowedContentTypes: [.plainText, .commaSeparatedText],
+            isPresented: $isShowingFilePicker,
+            allowedContentTypes: [.plainText, .commaSeparatedText, .text, UTType(filenameExtension: "csv")!],
             allowsMultipleSelection: false
         ) { result in
             importViewModel.handleFileImport(result)
@@ -109,7 +110,7 @@ struct ImportPlaylistView: View {
                 Spacer()
                 
                 Button {
-                    importViewModel.isShowingFilePicker = true
+                    isShowingFilePicker = true
                 } label: {
                     Label("Import File", systemImage: "doc")
                 }
@@ -190,6 +191,10 @@ struct ImportPlaylistView: View {
                         Label("\(importViewModel.needsSelectionCount)", systemImage: "questionmark.circle.fill")
                             .foregroundStyle(.orange)
                     }
+                    if importViewModel.skippedCount > 0 {
+                        Label("\(importViewModel.skippedCount)", systemImage: "forward.fill")
+                            .foregroundStyle(.secondary)
+                    }
                     if importViewModel.missingCount > 0 {
                         Label("\(importViewModel.missingCount)", systemImage: "xmark.circle.fill")
                             .foregroundStyle(.red)
@@ -203,7 +208,7 @@ struct ImportPlaylistView: View {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text("Please select a version for \(importViewModel.needsSelectionCount) track(s) before creating the playlist")
+                    Text("Select or skip \(importViewModel.needsSelectionCount) track(s) before creating the playlist")
                         .font(.caption)
                 }
                 .padding(8)
@@ -231,6 +236,9 @@ struct ImportPlaylistView: View {
                         entry: entry,
                         onSelectAlternative: { track in
                             importViewModel.selectAlternative(for: entry.id, track: track)
+                        },
+                        onSkip: {
+                            importViewModel.skipEntry(for: entry.id)
                         }
                     )
                 }
@@ -297,12 +305,13 @@ struct ImportPlaylistView: View {
 struct ImportEntryRow: View {
     let entry: ImportEntry
     let onSelectAlternative: (Track) -> Void
+    let onSkip: () -> Void
     
     @State private var isExpanded = false
     
     /// Determine if this entry needs user selection (multiple versions found)
     private var needsSelection: Bool {
-        entry.matchedTrack == nil && !entry.alternatives.isEmpty
+        entry.matchedTrack == nil && !entry.alternatives.isEmpty && !entry.isSkipped
     }
     
     var body: some View {
@@ -315,8 +324,14 @@ struct ImportEntryRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.originalText)
                         .font(.body)
+                        .strikethrough(entry.isSkipped)
+                        .foregroundStyle(entry.isSkipped ? .secondary : .primary)
                     
-                    if let track = entry.matchedTrack {
+                    if entry.isSkipped {
+                        Text("Skipped")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if let track = entry.matchedTrack {
                         HStack(spacing: 4) {
                             Text("→ \(track.artistName) - \(track.title)")
                             if !track.albumName.isEmpty {
@@ -327,7 +342,7 @@ struct ImportEntryRow: View {
                         .font(.caption)
                         .foregroundStyle(.green)
                     } else if !entry.alternatives.isEmpty {
-                        Text("Multiple versions found - please select one ↓")
+                        Text("Multiple versions found - select one or skip ↓")
                             .font(.caption)
                             .foregroundStyle(.orange)
                             .fontWeight(.medium)
@@ -355,11 +370,24 @@ struct ImportEntryRow: View {
             }
             
             // Alternatives - auto-expand when selection is needed
-            if (isExpanded || needsSelection) && entry.matchedTrack == nil && !entry.alternatives.isEmpty {
+            if (isExpanded || needsSelection) && entry.matchedTrack == nil && !entry.alternatives.isEmpty && !entry.isSkipped {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Select the version you want:")
-                        .font(.caption)
+                    HStack {
+                        Text("Select the version you want:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Spacer()
+                        
+                        Button {
+                            onSkip()
+                        } label: {
+                            Label("Skip this track", systemImage: "forward.fill")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
                         .foregroundStyle(.secondary)
+                    }
                     
                     ForEach(entry.alternatives) { track in
                         Button {
@@ -404,7 +432,10 @@ struct ImportEntryRow: View {
     
     @ViewBuilder
     private var statusIcon: some View {
-        if entry.matchedTrack != nil {
+        if entry.isSkipped {
+            Image(systemName: "forward.fill")
+                .foregroundStyle(.secondary)
+        } else if entry.matchedTrack != nil {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         } else if !entry.alternatives.isEmpty {
@@ -440,11 +471,15 @@ final class ImportPlaylistViewModel: ObservableObject {
     }
     
     var needsSelectionCount: Int {
-        parsedEntries.filter { $0.matchedTrack == nil && !$0.alternatives.isEmpty }.count
+        parsedEntries.filter { $0.matchedTrack == nil && !$0.alternatives.isEmpty && !$0.isSkipped }.count
     }
     
     var missingCount: Int {
-        parsedEntries.filter { $0.matchedTrack == nil && $0.alternatives.isEmpty }.count
+        parsedEntries.filter { $0.matchedTrack == nil && $0.alternatives.isEmpty && !$0.isSkipped }.count
+    }
+    
+    var skippedCount: Int {
+        parsedEntries.filter { $0.isSkipped }.count
     }
     
     var canCreatePlaylist: Bool {
@@ -462,9 +497,9 @@ final class ImportPlaylistViewModel: ObservableObject {
         case .found:
             return parsedEntries.filter { $0.matchedTrack != nil }
         case .needsSelection:
-            return parsedEntries.filter { $0.matchedTrack == nil && !$0.alternatives.isEmpty }
+            return parsedEntries.filter { $0.matchedTrack == nil && !$0.alternatives.isEmpty && !$0.isSkipped }
         case .missing:
-            return parsedEntries.filter { $0.matchedTrack == nil && $0.alternatives.isEmpty }
+            return parsedEntries.filter { ($0.matchedTrack == nil && $0.alternatives.isEmpty && !$0.isSkipped) || $0.isSkipped }
         }
     }
     
@@ -495,10 +530,8 @@ final class ImportPlaylistViewModel: ObservableObject {
             do {
                 rawText = try String(contentsOf: url, encoding: .utf8)
                 
-                // Auto-set playlist name from filename if empty
-                if playlistName.isEmpty {
-                    playlistName = url.deletingPathExtension().lastPathComponent
-                }
+                // Set playlist name from filename
+                playlistName = url.deletingPathExtension().lastPathComponent
             } catch {
                 parseError = "Failed to read file: \(error.localizedDescription)"
             }
@@ -815,9 +848,18 @@ final class ImportPlaylistViewModel: ObservableObject {
         var updatedEntry = parsedEntries[index]
         updatedEntry.matchedTrack = track
         updatedEntry.alternatives = []
+        updatedEntry.isSkipped = false
         parsedEntries[index] = updatedEntry
         
         // Force objectWillChange to ensure UI updates
+        objectWillChange.send()
+    }
+    
+    func skipEntry(for entryId: UUID) {
+        guard let index = parsedEntries.firstIndex(where: { $0.id == entryId }) else { return }
+        var updatedEntry = parsedEntries[index]
+        updatedEntry.isSkipped = true
+        parsedEntries[index] = updatedEntry
         objectWillChange.send()
     }
     
@@ -837,6 +879,7 @@ struct ImportEntry: Identifiable {
     let parsedTitle: String
     var matchedTrack: Track?
     var alternatives: [Track]
+    var isSkipped: Bool = false
 }
 
 // MARK: - Import Result Filter
