@@ -10,7 +10,7 @@ struct MainView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @StateObject private var playlistViewModel = PlaylistViewModel()
     @StateObject private var searchViewModel = SearchViewModel()
-    @StateObject private var audioService = AudioPreviewService.shared
+    @ObservedObject private var audioService = AudioPreviewService.shared
     
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     

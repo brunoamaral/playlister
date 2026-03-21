@@ -8,8 +8,8 @@ struct TracksColumn: View {
     // MARK: - Properties
     
     @ObservedObject var viewModel: PlaylistViewModel
-    @StateObject private var audioService = AudioPreviewService.shared
-    
+    @ObservedObject private var audioService = AudioPreviewService.shared
+
     // Editing state
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -17,6 +17,9 @@ struct TracksColumn: View {
     @State private var editedDescription = ""
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isDescriptionFocused: Bool
+
+    // Get Info sheet
+    @State private var trackForInfo: Track?
     
     // MARK: - Body
     
@@ -31,8 +34,11 @@ struct TracksColumn: View {
             }
         }
         .frame(minWidth: 300)
+        .sheet(item: $trackForInfo) { track in
+            TrackInfoView(track: track)
+        }
     }
-    
+
     // MARK: - Track List
     
     @ViewBuilder
@@ -402,6 +408,14 @@ struct TracksColumn: View {
             Task { await viewModel.removeTrack(item) }
         } label: {
             Label("Remove from Playlist", systemImage: "minus.circle")
+        }
+
+        Divider()
+
+        Button {
+            trackForInfo = item.track
+        } label: {
+            Label("Get Info", systemImage: "info.circle")
         }
     }
     

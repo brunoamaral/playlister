@@ -1,6 +1,27 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Insecure Session Delegate
+
+/// Shared URLSession delegate that bypasses SSL certificate validation.
+/// Used for connecting to local Plex servers with self-signed or invalid certificates
+/// when the user has explicitly opted in via Settings.
+final class InsecureSessionDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let serverTrust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+}
+
 // MARK: - URL Extensions
 
 extension URL {
@@ -114,21 +135,6 @@ extension Collection {
     }
 }
 
-// MARK: - Binding Extensions
-
-extension Binding {
-    /// Create a binding with a custom setter that also performs an action
-    func onChange(_ handler: @escaping (Value) -> Void) -> Binding<Value> {
-        Binding(
-            get: { self.wrappedValue },
-            set: { newValue in
-                self.wrappedValue = newValue
-                handler(newValue)
-            }
-        )
-    }
-}
-
 // MARK: - Task Extensions
 
 extension Task where Success == Never, Failure == Never {
@@ -167,23 +173,6 @@ final class PlexImageLoader: ObservableObject {
     
     private var currentTask: Task<Void, Never>?
     private static let cache = NSCache<NSString, NSImage>()
-    
-    /// URL session delegate that accepts self-signed certificates
-    private final class InsecureSessionDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
-        func urlSession(
-            _ session: URLSession,
-            didReceive challenge: URLAuthenticationChallenge,
-            completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-        ) {
-            if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-               let serverTrust = challenge.protectionSpace.serverTrust {
-                let credential = URLCredential(trust: serverTrust)
-                completionHandler(.useCredential, credential)
-            } else {
-                completionHandler(.performDefaultHandling, nil)
-            }
-        }
-    }
     
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.default

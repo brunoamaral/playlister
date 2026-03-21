@@ -9,7 +9,6 @@ struct PlaylisterApp: App {
     // MARK: - State
     
     @StateObject private var authViewModel = AuthViewModel()
-    @State private var isShowingSmartPlaylist = false
     
     // MARK: - Body
     

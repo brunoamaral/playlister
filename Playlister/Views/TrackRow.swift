@@ -19,7 +19,7 @@ struct TrackRow: View {
     var onRemove: (() -> Void)? = nil
     var onSelectionToggle: (() -> Void)? = nil
     
-    @StateObject private var audioService = AudioPreviewService.shared
+    @ObservedObject private var audioService = AudioPreviewService.shared
     @State private var isHovered = false
     
     // MARK: - Body
@@ -134,13 +134,7 @@ struct TrackRow: View {
     private var actionButtons: some View {
         HStack(spacing: 4) {
             if showsPlayButton && (isHovered || isPlaying) {
-                Button {
-                    if isPlaying {
-                        audioService.togglePlayPause()
-                    } else {
-                        audioService.play(track)
-                    }
-                } label: {
+                Button(action: handlePlayButtonTap) {
                     Image(systemName: isPlaying && audioService.isPlaying ? "pause.fill" : "play.fill")
                         .frame(width: 24, height: 24)
                 }
@@ -150,9 +144,7 @@ struct TrackRow: View {
             
             // Add button - always visible when showsAddButton is true
             if showsAddButton, let onAdd = onAdd {
-                Button {
-                    onAdd()
-                } label: {
+                Button(action: onAdd) {
                     Image(systemName: "plus.circle.fill")
                         .frame(width: 24, height: 24)
                 }
@@ -162,9 +154,7 @@ struct TrackRow: View {
             
             // Remove button - always visible when showsRemoveButton is true
             if showsRemoveButton, let onRemove = onRemove {
-                Button {
-                    onRemove()
-                } label: {
+                Button(action: onRemove) {
                     Image(systemName: "minus.circle.fill")
                         .foregroundStyle(.red)
                         .frame(width: 24, height: 24)
@@ -172,6 +162,14 @@ struct TrackRow: View {
                 .buttonStyle(.borderless)
                 .help("Remove from playlist")
             }
+        }
+    }
+    
+    private func handlePlayButtonTap() {
+        if isPlaying {
+            audioService.togglePlayPause()
+        } else {
+            audioService.play(track)
         }
     }
 }

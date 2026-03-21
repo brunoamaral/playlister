@@ -13,6 +13,7 @@ build:
 		-scheme $(SCHEME) \
 		-configuration $(CONFIGURATION) \
 		-destination "platform=macOS,arch=arm64" \
+		-allowProvisioningUpdates \
 		SYMROOT="$(BUILD_DIR)" \
 		build
 	@echo "✓ Build complete: $(APP_BUNDLE)"

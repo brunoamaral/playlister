@@ -149,8 +149,8 @@ final class SearchViewModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: recentSearchesKey)
     }
     
-    func useRecentSearch(_ search: String) {
-        searchQuery = search
-        Task { search }
+    func useRecentSearch(_ query: String) {
+        searchQuery = query
+        search()
     }
 }

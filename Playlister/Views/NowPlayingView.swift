@@ -7,7 +7,7 @@ struct NowPlayingView: View {
     
     // MARK: - Properties
     
-    @StateObject private var audioService = AudioPreviewService.shared
+    @ObservedObject private var audioService = AudioPreviewService.shared
     @State private var isHovered = false
     
     // MARK: - Body
@@ -69,21 +69,12 @@ struct NowPlayingView: View {
     // MARK: - Artwork
     
     private func artwork(for track: Track) -> some View {
-        ZStack {
-            if let thumbURL = track.thumb, let url = URL(string: thumbURL) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    artworkPlaceholder
-                }
-            } else {
-                artworkPlaceholder
-            }
+        PlexImage(url: track.thumb) {
+            artworkPlaceholder
         }
+        .aspectRatio(contentMode: .fill)
         .frame(width: 48, height: 48)
-        .cornerRadius(6)
+        .clipShape(.rect(cornerRadius: 6))
     }
     
     private var artworkPlaceholder: some View {

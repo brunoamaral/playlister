@@ -8,7 +8,6 @@ struct PlaylistRow: View {
     // MARK: - Properties
     
     let playlist: Playlist
-    @State private var isHovered = false
     
     // MARK: - Body
     
@@ -40,9 +39,6 @@ struct PlaylistRow: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
     }
     
     // MARK: - Playlist Icon

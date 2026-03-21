@@ -36,7 +36,7 @@ final class AudioPreviewService: ObservableObject {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 300
-        return URLSession(configuration: config, delegate: InsecureAudioSessionDelegate(), delegateQueue: nil)
+        return URLSession(configuration: config, delegate: InsecureSessionDelegate(), delegateQueue: nil)
     }()
     
     // MARK: - Singleton
@@ -304,22 +304,5 @@ extension AudioPreviewService {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%d:%02d", minutes, seconds)
-    }
-}
-
-// MARK: - Insecure Session Delegate for Audio Downloads
-
-/// URLSession delegate that bypasses SSL certificate validation for audio streaming
-final class InsecureAudioSessionDelegate: NSObject, URLSessionDelegate {
-    func urlSession(_ session: URLSession,
-                    didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let serverTrust = challenge.protectionSpace.serverTrust {
-            let credential = URLCredential(trust: serverTrust)
-            completionHandler(.useCredential, credential)
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
     }
 }

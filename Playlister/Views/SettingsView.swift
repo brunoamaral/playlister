@@ -19,20 +19,17 @@ struct SettingsView: View {
     
     var body: some View {
         TabView {
-            generalSettings
-                .tabItem {
-                    Label("General", systemImage: "gear")
-                }
+            Tab("General", systemImage: "gear") {
+                generalSettings
+            }
             
-            accountSettings
-                .tabItem {
-                    Label("Account", systemImage: "person.circle")
-                }
+            Tab("Account", systemImage: "person.circle") {
+                accountSettings
+            }
             
-            playbackSettings
-                .tabItem {
-                    Label("Playback", systemImage: "play.circle")
-                }
+            Tab("Playback", systemImage: "play.circle") {
+                playbackSettings
+            }
         }
         .frame(width: 450, height: 300)
     }

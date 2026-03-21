@@ -14,6 +14,7 @@
 		MDL002 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_MDL002 /* Track.swift */; };
 		MDL003 /* PlexServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_MDL003 /* PlexServer.swift */; };
 		MDL004 /* PlexAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_MDL004 /* PlexAuth.swift */; };
+		MDL005 /* ExtendedTrackInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_MDL005 /* ExtendedTrackInfo.swift */; };
 		SVC001 /* PlexAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_SVC001 /* PlexAPIService.swift */; };
 		SVC002 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_SVC002 /* KeychainService.swift */; };
 		SVC003 /* AudioPreviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_SVC003 /* AudioPreviewService.swift */; };
@@ -32,6 +33,7 @@
 		VWS009 /* SmartPlaylistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS009 /* SmartPlaylistView.swift */; };
 		VWS010 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS010 /* NowPlayingView.swift */; };
 		VWS011 /* ImportPlaylistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS011 /* ImportPlaylistView.swift */; };
+		VWS012 /* TrackInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWS012 /* TrackInfoView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +46,7 @@
 		SRC_MDL002 /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
 		SRC_MDL003 /* PlexServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexServer.swift; sourceTree = "<group>"; };
 		SRC_MDL004 /* PlexAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAuth.swift; sourceTree = "<group>"; };
+		SRC_MDL005 /* ExtendedTrackInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtendedTrackInfo.swift; sourceTree = "<group>"; };
 		SRC_SVC001 /* PlexAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAPIService.swift; sourceTree = "<group>"; };
 		SRC_SVC002 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		SRC_SVC003 /* AudioPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPreviewService.swift; sourceTree = "<group>"; };
@@ -62,6 +65,7 @@
 		SRC_VWS009 /* SmartPlaylistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPlaylistView.swift; sourceTree = "<group>"; };
 		SRC_VWS010 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
 		SRC_VWS011 /* ImportPlaylistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPlaylistView.swift; sourceTree = "<group>"; };
+		SRC_VWS012 /* TrackInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInfoView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -106,6 +110,7 @@
 				SRC_MDL002 /* Track.swift */,
 				SRC_MDL003 /* PlexServer.swift */,
 				SRC_MDL004 /* PlexAuth.swift */,
+				SRC_MDL005 /* ExtendedTrackInfo.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -160,6 +165,7 @@
 				SRC_VWS009 /* SmartPlaylistView.swift */,
 				SRC_VWS010 /* NowPlayingView.swift */,
 				SRC_VWS011 /* ImportPlaylistView.swift */,
+				SRC_VWS012 /* TrackInfoView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -239,6 +245,7 @@
 				MDL002 /* Track.swift in Sources */,
 				MDL003 /* PlexServer.swift in Sources */,
 				MDL004 /* PlexAuth.swift in Sources */,
+				MDL005 /* ExtendedTrackInfo.swift in Sources */,
 				SVC001 /* PlexAPIService.swift in Sources */,
 				SVC002 /* KeychainService.swift in Sources */,
 				SVC003 /* AudioPreviewService.swift in Sources */,
@@ -256,6 +263,7 @@
 				VWS009 /* SmartPlaylistView.swift in Sources */,
 				VWS010 /* NowPlayingView.swift in Sources */,
 				VWS011 /* ImportPlaylistView.swift in Sources */,
+				VWS012 /* TrackInfoView.swift in Sources */,
 				UTL001 /* Extensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -704,7 +704,7 @@ final class PlaylistViewModel: ObservableObject {
             break
             
         case .addTracks:
-            if let (playlistId, tracks) = lastAction.data as? (String, [Track]) {
+            if let (playlistId, _) = lastAction.data as? (String, [Track]) {
                 // Remove the added tracks
                 if let playlist = playlists.first(where: { $0.id == playlistId }) {
                     // This is complex - would need to track which items were added
@@ -726,7 +726,7 @@ final class PlaylistViewModel: ObservableObject {
         case .moveTrack:
             if let (playlistId, oldIndex, newIndex) = lastAction.data as? (String, Int, Int) {
                 // Move back
-                if let playlist = playlists.first(where: { $0.id == playlistId }) {
+                if playlists.contains(where: { $0.id == playlistId }) {
                     let reverseSource = IndexSet(integer: newIndex > oldIndex ? newIndex - 1 : newIndex)
                     let reverseDest = oldIndex
                     await moveTrack(from: reverseSource, to: reverseDest)

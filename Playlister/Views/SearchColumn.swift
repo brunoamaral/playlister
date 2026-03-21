@@ -9,8 +9,11 @@ struct SearchColumn: View {
     
     @ObservedObject var viewModel: SearchViewModel
     @ObservedObject var playlistViewModel: PlaylistViewModel
-    @StateObject private var audioService = AudioPreviewService.shared
+    @ObservedObject private var audioService = AudioPreviewService.shared
     @FocusState private var isTitleFocused: Bool
+
+    // Get Info sheet
+    @State private var trackForInfo: Track?
     
     /// Search results filtered to exclude tracks already in the current playlist
     private var filteredSearchResults: [Track] {
@@ -50,6 +53,9 @@ struct SearchColumn: View {
         }
         .frame(minWidth: 300)
         .navigationTitle(playlistViewModel.isCreatingNewPlaylist ? "New Playlist" : "Search")
+        .sheet(item: $trackForInfo) { track in
+            TrackInfoView(track: track)
+        }
     }
     
     // MARK: - New Playlist Header
@@ -304,6 +310,14 @@ struct SearchColumn: View {
             viewModel.selectAll()
         } label: {
             Label("Select All", systemImage: "checkmark.circle.fill")
+        }
+
+        Divider()
+
+        Button {
+            trackForInfo = track
+        } label: {
+            Label("Get Info", systemImage: "info.circle")
         }
     }
     

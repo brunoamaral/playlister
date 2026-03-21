@@ -1,25 +1,6 @@
 import Foundation
 import AppKit
 
-// MARK: - SSL Bypass Delegate
-
-/// URLSession delegate that allows self-signed certificates for local servers
-final class InsecureURLSessionDelegate: NSObject, URLSessionDelegate {
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        // Accept any server certificate for local connections
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let serverTrust = challenge.protectionSpace.serverTrust {
-            let credential = URLCredential(trust: serverTrust)
-            completionHandler(.useCredential, credential)
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
-}
 
 // MARK: - Plex API Service
 
@@ -43,7 +24,7 @@ actor PlexAPIService {
     
     private var session: URLSession
     private var insecureSession: URLSession
-    private let insecureDelegate = InsecureURLSessionDelegate()
+    private let insecureDelegate = InsecureSessionDelegate()
     private var authToken: String?
     private var currentServer: PlexServer?
     private var allowInsecureConnections: Bool = false
@@ -625,45 +606,39 @@ actor PlexAPIService {
             }
         }
         
-        // Score and sort results based on how well they match the query
+        // Score and sort results based on how well they match the query.
+        // localizedStandardContains provides locale-aware, case- and diacritic-insensitive matching.
         let scoredResults = uniqueResults.map { track -> (Track, Int) in
             var score = 0
-            let titleLower = track.title.lowercased()
-            let artistLower = track.artistName.lowercased()
-            let albumLower = track.albumName.lowercased()
             
-            // Exact title match
-            if words.contains(where: { titleLower == $0 }) {
+            // Exact title match (case-insensitive)
+            if words.contains(where: { track.title.localizedCaseInsensitiveCompare($0) == .orderedSame }) {
                 score += 100
             }
             // Title contains a word from query
             for word in words {
-                if titleLower.contains(word) {
+                if track.title.localizedStandardContains(word) {
                     score += 30
                 }
             }
             
             // Artist contains words from query
             for word in words {
-                if artistLower.contains(word) {
+                if track.artistName.localizedStandardContains(word) {
                     score += 25
                 }
             }
             
             // Album contains words from query
             for word in words {
-                if albumLower.contains(word) {
+                if track.albumName.localizedStandardContains(word) {
                     score += 10
                 }
             }
             
-            // Bonus if both artist AND title match different words
-            let artistWords = Set(artistLower.split(separator: " ").map(String.init))
-            let titleWords = Set(titleLower.split(separator: " ").map(String.init))
-            let queryWords = Set(words)
-            
-            let artistMatches = !artistWords.isDisjoint(with: queryWords)
-            let titleMatches = !titleWords.isDisjoint(with: queryWords)
+            // Bonus if both artist AND title contain different words from the query
+            let artistMatches = words.contains { track.artistName.localizedStandardContains($0) }
+            let titleMatches = words.contains { track.title.localizedStandardContains($0) }
             
             if artistMatches && titleMatches {
                 score += 50
@@ -875,8 +850,39 @@ actor PlexAPIService {
         return nil
     }
     
+    // MARK: - Track Metadata
+
+    /// Fetch full metadata for a single track from /library/metadata/{ratingKey}
+    func fetchTrackMetadata(ratingKey: String) async throws -> ExtendedTrackInfo {
+        guard let server = currentServer, let token = authToken else {
+            throw PlexAPIError.notConnected
+        }
+
+        let url = URL(string: server.baseURL + "/library/metadata/\(ratingKey)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.allHTTPHeaderFields = PlexHeaders.headers(token: token)
+
+        let (data, response) = try await activeSession.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw PlexAPIError.serverError
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let container = json["MediaContainer"] as? [String: Any],
+              let metadata = container["Metadata"] as? [[String: Any]],
+              let dict = metadata.first,
+              let info = ExtendedTrackInfo(from: dict, serverURL: server.baseURL, token: token) else {
+            throw PlexAPIError.invalidResponse
+        }
+
+        return info
+    }
+
     // MARK: - Signout
-    
+
     func signOut() {
         authToken = nil
         currentServer = nil
