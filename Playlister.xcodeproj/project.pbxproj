@@ -19,6 +19,7 @@
 		SVC002 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_SVC002 /* KeychainService.swift */; };
 		SVC003 /* AudioPreviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_SVC003 /* AudioPreviewService.swift */; };
 		UTL001 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_UTL001 /* Extensions.swift */; };
+		UTL002 /* ZipArchiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_UTL002 /* ZipArchiver.swift */; };
 		VWM001 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWM001 /* AuthViewModel.swift */; };
 		VWM002 /* PlaylistViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWM002 /* PlaylistViewModel.swift */; };
 		VWM003 /* SearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC_VWM003 /* SearchViewModel.swift */; };
@@ -51,6 +52,7 @@
 		SRC_SVC002 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		SRC_SVC003 /* AudioPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPreviewService.swift; sourceTree = "<group>"; };
 		SRC_UTL001 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		SRC_UTL002 /* ZipArchiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipArchiver.swift; sourceTree = "<group>"; };
 		SRC_VWM001 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		SRC_VWM002 /* PlaylistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistViewModel.swift; sourceTree = "<group>"; };
 		SRC_VWM003 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
@@ -137,6 +139,7 @@
 			isa = PBXGroup;
 			children = (
 				SRC_UTL001 /* Extensions.swift */,
+				SRC_UTL002 /* ZipArchiver.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -265,6 +268,7 @@
 				VWS011 /* ImportPlaylistView.swift in Sources */,
 				VWS012 /* TrackInfoView.swift in Sources */,
 				UTL001 /* Extensions.swift in Sources */,
+				UTL002 /* ZipArchiver.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

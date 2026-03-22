@@ -267,6 +267,17 @@ actor PlexAPIService {
         return metadata.compactMap { Playlist(from: $0, serverURL: server.baseURL, token: token) }
     }
     
+    /// Download raw file data using the same session as other Plex requests.
+    /// This ensures self-signed certificate handling is applied consistently.
+    func downloadFile(url: URL) async throws -> Data {
+        let (data, response) = try await activeSession.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw PlexAPIError.serverError
+        }
+        return data
+    }
+
     /// Fetch tracks for a specific playlist
     func fetchPlaylistTracks(playlistId: String) async throws -> [PlaylistItem] {
         guard let server = currentServer, let token = authToken else {

@@ -16,6 +16,7 @@ struct PlaylistsColumn: View {
     @State private var editingSmartPlaylist: Playlist?
     @State private var isShowingExportPanel = false
     @State private var playlistToExport: Playlist?
+    @State private var zipExportStatus: String?
     
     // MARK: - Computed Properties
     
@@ -114,6 +115,22 @@ struct PlaylistsColumn: View {
         .sheet(isPresented: $isShowingImportSheet) {
             ImportPlaylistView(playlistViewModel: viewModel)
         }
+        .overlay(alignment: .bottom) {
+            if let status = zipExportStatus {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text(status)
+                        .font(.caption)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.bottom, 8)
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
@@ -189,6 +206,12 @@ struct PlaylistsColumn: View {
             Label("Export to CSV...", systemImage: "square.and.arrow.up")
         }
         
+        Button {
+            exportAsZip(playlist)
+        } label: {
+            Label("Export as M3U + ZIP...", systemImage: "archivebox")
+        }
+        
         Divider()
         
         Button(role: .destructive) {
@@ -219,6 +242,12 @@ struct PlaylistsColumn: View {
             Label("Export to CSV...", systemImage: "square.and.arrow.up")
         }
         
+        Button {
+            exportAsZip(playlist)
+        } label: {
+            Label("Export as M3U + ZIP...", systemImage: "archivebox")
+        }
+        
         Divider()
         
         Button(role: .destructive) {
@@ -245,10 +274,8 @@ struct PlaylistsColumn: View {
     
     private func exportPlaylist(_ playlist: Playlist) {
         Task {
-            // Fetch tracks for the playlist if needed
             var tracks = viewModel.currentTracks.map { $0.track }
             if viewModel.selectedPlaylist?.id != playlist.id || tracks.isEmpty {
-                // Need to fetch tracks for this playlist
                 if let fetchedTracks = try? await viewModel.fetchTracksForExport(playlist: playlist) {
                     tracks = fetchedTracks
                 }
@@ -256,17 +283,18 @@ struct PlaylistsColumn: View {
             
             guard !tracks.isEmpty else { return }
             
-            // Generate CSV content
             let csvContent = generateCSV(from: tracks, playlistTitle: playlist.title)
             
-            // Show save panel
             let savePanel = NSSavePanel()
             savePanel.allowedContentTypes = [.commaSeparatedText]
             savePanel.nameFieldStringValue = "\(playlist.title).csv"
             savePanel.title = "Export Playlist"
             savePanel.message = "Choose where to save the playlist CSV file"
             
-            let response = await savePanel.beginSheetModal(for: NSApp.keyWindow!)
+            // begin() avoids a crash when keyWindow is nil (e.g. just after a context menu closes)
+            let response = await withCheckedContinuation { (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
+                savePanel.begin { continuation.resume(returning: $0) }
+            }
             
             if response == .OK, let url = savePanel.url {
                 do {
@@ -276,6 +304,82 @@ struct PlaylistsColumn: View {
                 }
             }
         }
+    }
+    
+    private func exportAsZip(_ playlist: Playlist) {
+        Task {
+            var tracks = viewModel.currentTracks.map { $0.track }
+            if viewModel.selectedPlaylist?.id != playlist.id || tracks.isEmpty {
+                if let fetchedTracks = try? await viewModel.fetchTracksForExport(playlist: playlist) {
+                    tracks = fetchedTracks
+                }
+            }
+            
+            guard !tracks.isEmpty else { return }
+            
+            // Ask the user where to save before doing any work
+            let savePanel = NSSavePanel()
+            savePanel.allowedContentTypes = [.zip]
+            savePanel.nameFieldStringValue = "\(playlist.title).zip"
+            savePanel.title = "Export Playlist as M3U + ZIP"
+            savePanel.message = "The archive will contain all songs and an M3U playlist file."
+            
+            let response = await withCheckedContinuation { (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
+                savePanel.begin { continuation.resume(returning: $0) }
+            }
+            
+            guard response == .OK, let destinationURL = savePanel.url else { return }
+            
+            let archiver = ZipArchiver()
+            var m3uLines = ["#EXTM3U", ""]
+            
+            for (index, track) in tracks.enumerated() {
+                let trackNum = track.trackNumber ?? (index + 1)
+                let ext = track.mediaKey.flatMap { URL(fileURLWithPath: $0).pathExtension }.flatMap { $0.isEmpty ? nil : $0 } ?? "mp3"
+                let baseName = sanitizeFilename(String(format: "%02d - %@ - %@", trackNum, track.artistName, track.title))
+                let filename = "\(baseName).\(ext)"
+                
+                zipExportStatus = "Downloading \(index + 1)/\(tracks.count): \(track.title)"
+                
+                guard let streamURLString = track.streamURL,
+                      let downloadURL = URL(string: streamURLString + "&download=1") else {
+                    continue
+                }
+                
+                do {
+                    let data = try await PlexAPIService.shared.downloadFile(url: downloadURL)
+                    archiver.addFile(named: filename, data: data)
+                    let durationSecs = track.duration / 1000
+                    m3uLines.append("#EXTINF:\(durationSecs),\(track.artistName) - \(track.title)")
+                    m3uLines.append(filename)
+                    m3uLines.append("")
+                } catch {
+                    print("Could not download \(track.title): \(error)")
+                }
+            }
+            
+            // Add M3U file to the archive
+            let m3uFilename = sanitizeFilename(playlist.title) + ".m3u"
+            if let m3uData = m3uLines.joined(separator: "\n").data(using: .utf8) {
+                archiver.addFile(named: m3uFilename, data: m3uData)
+            }
+            
+            zipExportStatus = "Building archive…"
+            let zipData = archiver.buildArchive()
+            
+            do {
+                try zipData.write(to: destinationURL)
+            } catch {
+                print("Failed to write ZIP: \(error)")
+            }
+            
+            zipExportStatus = nil
+        }
+    }
+    
+    private func sanitizeFilename(_ name: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/\\:*?\"<>|")
+        return name.components(separatedBy: invalid).joined(separator: "_")
     }
     
     private func generateCSV(from tracks: [Track], playlistTitle: String) -> String {
