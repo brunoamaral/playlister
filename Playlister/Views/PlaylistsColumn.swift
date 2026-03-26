@@ -16,7 +16,7 @@ struct PlaylistsColumn: View {
     @State private var editingSmartPlaylist: Playlist?
     @State private var isShowingExportPanel = false
     @State private var playlistToExport: Playlist?
-    @State private var zipExportStatus: String?
+    @State private var exportStatus: String?
     
     // MARK: - Computed Properties
     
@@ -116,7 +116,7 @@ struct PlaylistsColumn: View {
             ImportPlaylistView(playlistViewModel: viewModel)
         }
         .overlay(alignment: .bottom) {
-            if let status = zipExportStatus {
+            if let status = exportStatus {
                 HStack(spacing: 8) {
                     ProgressView()
                         .scaleEffect(0.7)
@@ -207,9 +207,9 @@ struct PlaylistsColumn: View {
         }
         
         Button {
-            exportAsZip(playlist)
+            exportAsFolder(playlist)
         } label: {
-            Label("Export as M3U + ZIP...", systemImage: "archivebox")
+            Label("Export as M3U + Folder...", systemImage: "folder.badge.plus")
         }
         
         Divider()
@@ -243,9 +243,9 @@ struct PlaylistsColumn: View {
         }
         
         Button {
-            exportAsZip(playlist)
+            exportAsFolder(playlist)
         } label: {
-            Label("Export as M3U + ZIP...", systemImage: "archivebox")
+            Label("Export as M3U + Folder...", systemImage: "folder.badge.plus")
         }
         
         Divider()
@@ -306,7 +306,7 @@ struct PlaylistsColumn: View {
         }
     }
     
-    private func exportAsZip(_ playlist: Playlist) {
+    private func exportAsFolder(_ playlist: Playlist) {
         Task {
             var tracks = viewModel.currentTracks.map { $0.track }
             if viewModel.selectedPlaylist?.id != playlist.id || tracks.isEmpty {
@@ -317,38 +317,49 @@ struct PlaylistsColumn: View {
             
             guard !tracks.isEmpty else { return }
             
-            // Ask the user where to save before doing any work
-            let savePanel = NSSavePanel()
-            savePanel.allowedContentTypes = [.zip]
-            savePanel.nameFieldStringValue = "\(playlist.title).zip"
-            savePanel.title = "Export Playlist as M3U + ZIP"
-            savePanel.message = "The archive will contain all songs and an M3U playlist file."
+            // Ask the user to choose a destination folder
+            let openPanel = NSOpenPanel()
+            openPanel.canChooseFiles = false
+            openPanel.canChooseDirectories = true
+            openPanel.canCreateDirectories = true
+            openPanel.title = "Export Playlist as M3U + Folder"
+            openPanel.message = "Choose a destination folder. A subfolder named after the playlist will be created inside it."
+            openPanel.prompt = "Choose"
             
             let response = await withCheckedContinuation { (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
-                savePanel.begin { continuation.resume(returning: $0) }
+                openPanel.begin { continuation.resume(returning: $0) }
             }
             
-            guard response == .OK, let destinationURL = savePanel.url else { return }
-            
-            let archiver = ZipArchiver()
+            guard response == .OK, let parentURL = openPanel.url else { return }
+
+            // Create the destination subfolder
+            let folderName = sanitizeFilename(playlist.title)
+            let destDir = parentURL.appendingPathComponent(folderName, isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+            } catch {
+                print("Could not create destination folder: \(error)")
+                return
+            }
+
             var m3uLines = ["#EXTM3U", ""]
-            
+
             for (index, track) in tracks.enumerated() {
                 let trackNum = track.trackNumber ?? (index + 1)
                 let ext = track.mediaKey.flatMap { URL(fileURLWithPath: $0).pathExtension }.flatMap { $0.isEmpty ? nil : $0 } ?? "mp3"
                 let baseName = sanitizeFilename(String(format: "%02d - %@ - %@", trackNum, track.artistName, track.title))
                 let filename = "\(baseName).\(ext)"
-                
-                zipExportStatus = "Downloading \(index + 1)/\(tracks.count): \(track.title)"
-                
+
+                exportStatus = "Downloading \(index + 1)/\(tracks.count): \(track.title)"
+
                 guard let streamURLString = track.streamURL,
                       let downloadURL = URL(string: streamURLString + "&download=1") else {
                     continue
                 }
-                
+
                 do {
                     let data = try await PlexAPIService.shared.downloadFile(url: downloadURL)
-                    archiver.addFile(named: filename, data: data)
+                    try data.write(to: destDir.appendingPathComponent(filename))
                     let durationSecs = track.duration / 1000
                     m3uLines.append("#EXTINF:\(durationSecs),\(track.artistName) - \(track.title)")
                     m3uLines.append(filename)
@@ -357,23 +368,14 @@ struct PlaylistsColumn: View {
                     print("Could not download \(track.title): \(error)")
                 }
             }
-            
-            // Add M3U file to the archive
-            let m3uFilename = sanitizeFilename(playlist.title) + ".m3u"
+
+            // Write M3U file into the destination folder
+            let m3uFilename = folderName + ".m3u"
             if let m3uData = m3uLines.joined(separator: "\n").data(using: .utf8) {
-                archiver.addFile(named: m3uFilename, data: m3uData)
+                try? m3uData.write(to: destDir.appendingPathComponent(m3uFilename))
             }
-            
-            zipExportStatus = "Building archive…"
-            let zipData = archiver.buildArchive()
-            
-            do {
-                try zipData.write(to: destinationURL)
-            } catch {
-                print("Failed to write ZIP: \(error)")
-            }
-            
-            zipExportStatus = nil
+
+            exportStatus = nil
         }
     }
     
