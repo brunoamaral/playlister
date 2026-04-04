@@ -22,7 +22,7 @@ A native macOS app for managing Plex music playlists.
 
 ## Screenshots
 
-![Playlister Screenshot](screenshots/image-20260202173400382.png)
+![Playlister Screenshot](screenshots/screenshot1.png)
 
 ## Requirements
 
